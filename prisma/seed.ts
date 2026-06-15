@@ -18,7 +18,8 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.
 
 async function main() {
   const username = process.env.SEED_ADMIN_USER ?? 'admin'
-  const password = process.env.SEED_ADMIN_PASS ?? 'changeme123'
+  const password = process.env.SEED_ADMIN_PASS
+  if (!password) throw new Error('SEED_ADMIN_PASS is required (no insecure default)')
   const passwordHash = await bcrypt.hash(password, 12)
   await db.employee.upsert({
     where: { username },

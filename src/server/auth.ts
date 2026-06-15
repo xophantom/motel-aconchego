@@ -11,8 +11,13 @@ export async function authorizeCredentials(username: string, password: string) {
   return { id: String(e.id), name: e.name, role: e.role as EmployeeRole }
 }
 
+const authSecret = process.env.AUTH_SECRET
+if (!authSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('AUTH_SECRET is required in production')
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  secret: process.env.AUTH_SECRET ?? 'dev-secret-change-in-production',
+  secret: authSecret ?? 'dev-only-insecure-secret',
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   providers: [

@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 vi.mock('server-only', () => ({}))
-vi.mock('next/cache', () => ({ updateTag: vi.fn(), revalidateTag: vi.fn() }))
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn(), revalidateTag: vi.fn() }))
 const session = vi.hoisted(() => ({ current: null as null | { id: number; name: string; role: string } }))
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 

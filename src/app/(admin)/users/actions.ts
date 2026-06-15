@@ -1,5 +1,5 @@
 'use server'
-import { updateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { Prisma } from '@/generated/prisma/client'
 import { createEmployeeSchema, updateEmployeeSchema, resetPasswordSchema } from '@/lib/validation/employee'
 import * as employees from '@/server/data/employees'
@@ -19,7 +19,7 @@ export async function createUserAction(_prev: ActionState, formData: FormData): 
   } catch (e) {
     return { ok: false, error: mapError(e) }
   }
-  updateTag('employees')
+  revalidatePath('/users')
   return { ok: true }
 }
 
@@ -34,7 +34,7 @@ export async function updateUserAction(id: number, _prev: ActionState, formData:
   } catch (e) {
     return { ok: false, error: mapError(e) }
   }
-  updateTag('employees')
+  revalidatePath('/users')
   return { ok: true }
 }
 
@@ -55,7 +55,7 @@ export async function deactivateUserAction(id: number): Promise<ActionState> {
   } catch (e) {
     return { ok: false, error: mapError(e) }
   }
-  updateTag('employees')
+  revalidatePath('/users')
   return { ok: true }
 }
 

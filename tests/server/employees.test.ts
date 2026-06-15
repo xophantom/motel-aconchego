@@ -4,7 +4,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { listEmployees, createEmployee, deactivateEmployee, countActiveManagers } from '@/server/data/employees'
+import { listEmployees, createEmployee, deactivateEmployee, countActiveManagers, updateEmployee, resetPassword } from '@/server/data/employees'
 import { verifyPassword } from '@/server/password'
 
 beforeEach(async () => {
@@ -29,5 +29,19 @@ describe('employees DAL', () => {
     await db.employee.updateMany({ where: { role: 'manager', id: { not: m.id } }, data: { active: false } })
     await expect(deactivateEmployee(m.id)).rejects.toThrow(/last manager/i)
     expect(await countActiveManagers()).toBeGreaterThanOrEqual(1)
+  })
+
+  it('cannot demote the last active manager via role change', async () => {
+    const m = await createEmployee({ name: 'Only', username: 'onlymgr', role: 'manager', password: 'abcdef' })
+    await db.employee.updateMany({ where: { role: 'manager', id: { not: m.id } }, data: { active: false } })
+    await expect(updateEmployee(m.id, { role: 'reception', active: true })).rejects.toThrow(/last manager/i)
+  })
+
+  it('manager can reset a password', async () => {
+    const e = await createEmployee({ name: 'P', username: 'pchg', role: 'reception', password: 'abcdef' })
+    await resetPassword(e.id, 'newpass1')
+    const fresh = await db.employee.findUniqueOrThrow({ where: { id: e.id } })
+    expect(await verifyPassword('newpass1', fresh.passwordHash)).toBe(true)
+    expect(await verifyPassword('abcdef', fresh.passwordHash)).toBe(false)
   })
 })
