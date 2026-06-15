@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BillingType {
+  motel
+  hotel
+  @@map("billing_type")
+}
+
+enum DayType {
+  normal
+  special
+  @@map("day_type")
+}
+
+enum EmployeeRole {
+  reception
+  manager
+  housekeeper
+  @@map("employee_role")
+}
+
+enum RoomStatus {
+  free
+  occupied
+  cleaning
+  maintenance
+  @@map("room_status")
+}
+
+enum ProductCategory {
+  minibar
+  erotic
+  kitchen
+  other
+  @@map("product_category")
+}
+
+enum StayStatus {
+  open
+  closed
+  canceled
+  @@map("stay_status")
+}
+
+enum StayType {
+  room
+  walkin
+  @@map("stay_type")
+}
+
+enum CashMovementType {
+  stay
+  consumption
+  withdrawal
+  supply
+  correction
+  @@map("cash_movement_type")
+}
+
+enum ShiftPeriod {
+  day_07_19
+  night_19_07
+  @@map("shift_period")
+}
+
+model RoomCategory {
+  id             Int         @id @default(autoincrement()) @db.SmallInt
+  code           String      @unique @db.Char(1)
+  description    String
+  billing        BillingType @default(motel)
+  minPeriodMin   Int         @map("min_period_min")
+  maxPeriodMin   Int         @map("max_period_min")
+  includedGuests Int         @default(2) @map("included_guests") @db.SmallInt
+  rooms          Room[]
+  rates          Rate[]
+  stays          Stay[]
+
+  @@map("room_category")
+}
+
+model Rate {
+  categoryId      Int          @map("category_id") @db.SmallInt
+  day             DayType
+  basePrice       Decimal      @map("base_price") @db.Decimal(10, 2)
+  excessPrice30m  Decimal      @map("excess_price_30m") @db.Decimal(10, 2)
+  overnightPrice  Decimal      @map("overnight_price") @db.Decimal(10, 2)
+  extraGuestPrice Decimal      @default(0) @map("extra_guest_price") @db.Decimal(10, 2)
+  category        RoomCategory @relation(fields: [categoryId], references: [id])
+
+  @@id([categoryId, day])
+  @@map("rate")
+}
+
+model Employee {
+  id           Int            @id @default(autoincrement())
+  name         String
+  username     String         @unique
+  role         EmployeeRole
+  passwordHash String         @map("password_hash")
+  active       Boolean        @default(true)
+  staysEntered Stay[]         @relation("entry")
+  staysPaid    Stay[]         @relation("payment")
+  movements    CashMovement[]
+  shifts       Shift[]
+  events       EventLog[]
+
+  @@map("employee")
+}
+
+model Customer {
+  id       BigInt  @id @default(autoincrement())
+  name     String?
+  document String?
+  phone    String?
+  stays    Stay[]
+
+  @@map("customer")
+}
+
+model Product {
+  code         String          @id
+  description  String
+  category     ProductCategory @default(minibar)
+  price        Decimal         @db.Decimal(10, 2)
+  cost         Decimal         @default(0) @db.Decimal(10, 2)
+  stockQty     Int             @default(0) @map("stock_qty")
+  minStock     Int             @default(0) @map("min_stock")
+  trackStock   Boolean         @default(true) @map("track_stock")
+  consumptions Consumption[]
+
+  @@map("product")
+}
+
+model CostCenter {
+  code        String        @id
+  description String
+  entries     LedgerEntry[]
+
+  @@map("cost_center")
+}
+
+model Room {
+  number            String        @id
+  categoryId        Int?          @map("category_id") @db.SmallInt
+  status            RoomStatus    @default(free)
+  currentStayId     BigInt?       @map("current_stay_id")
+  maintenanceReason String?       @map("maintenance_reason")
+  active            Boolean       @default(true)
+  category          RoomCategory? @relation(fields: [categoryId], references: [id])
+  currentStay       Stay?         @relation("currentStay", fields: [currentStayId], references: [id])
+  stays             Stay[]        @relation("roomStays")
+
+  @@map("room")
+}
+
+model Shift {
+  id             BigInt         @id @default(autoincrement())
+  businessDate   DateTime       @map("business_date") @db.Date
+  period         ShiftPeriod
+  employeeId     Int?           @map("employee_id")
+  openedAt       DateTime       @map("opened_at") @db.Timestamptz
+  closedAt       DateTime?      @map("closed_at") @db.Timestamptz
+  openingBalance Decimal        @default(0) @map("opening_balance") @db.Decimal(10, 2)
+  closingBalance Decimal?       @map("closing_balance") @db.Decimal(10, 2)
+  employee       Employee?      @relation(fields: [employeeId], references: [id])
+  stays          Stay[]
+  movements      CashMovement[]
+
+  @@unique([businessDate, period])
+  @@map("shift")
+}
+
+model Stay {
+  id                BigInt        @id @default(autoincrement())
+  type              StayType      @default(room)
+  roomNumber        String?       @map("room_number")
+  categoryId        Int?          @map("category_id") @db.SmallInt
+  customerId        BigInt?       @map("customer_id")
+  checkIn           DateTime      @map("check_in") @db.Timestamptz
+  checkOut          DateTime?     @map("check_out") @db.Timestamptz
+  day               DayType       @default(normal)
+  guests            Int           @default(2) @db.SmallInt
+  prepaidAmount     Decimal       @default(0) @map("prepaid_amount") @db.Decimal(10, 2)
+  stayAmount        Decimal?      @map("stay_amount") @db.Decimal(10, 2)
+  consumptionAmount Decimal       @default(0) @map("consumption_amount") @db.Decimal(10, 2)
+  status            StayStatus    @default(open)
+  entryEmployeeId   Int?          @map("entry_employee_id")
+  paymentEmployeeId Int?          @map("payment_employee_id")
+  shiftId           BigInt?       @map("shift_id")
+  legacySeq         BigInt?       @map("legacy_seq")
+  room              Room?         @relation("roomStays", fields: [roomNumber], references: [number])
+  currentOfRoom     Room[]        @relation("currentStay")
+  category          RoomCategory? @relation(fields: [categoryId], references: [id])
+  customer          Customer?     @relation(fields: [customerId], references: [id])
+  entryEmployee     Employee?     @relation("entry", fields: [entryEmployeeId], references: [id])
+  paymentEmployee   Employee?     @relation("payment", fields: [paymentEmployeeId], references: [id])
+  shift             Shift?        @relation(fields: [shiftId], references: [id])
+  consumptions      Consumption[]
+  movements         CashMovement[]
+  wakeUps           WakeUpCall[]
+
+  @@index([roomNumber, checkIn])
+  @@index([customerId])
+  @@map("stay")
+}
+
+model Consumption {
+  id          BigInt   @id @default(autoincrement())
+  stayId      BigInt   @map("stay_id")
+  productCode String?  @map("product_code")
+  qty         Int
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  stay        Stay     @relation(fields: [stayId], references: [id])
+  product     Product? @relation(fields: [productCode], references: [code])
+
+  @@index([stayId])
+  @@map("consumption")
+}
+
+model CashMovement {
+  id          BigInt           @id @default(autoincrement())
+  type        CashMovementType
+  stayId      BigInt?          @map("stay_id")
+  amount      Decimal          @db.Decimal(10, 2)
+  employeeId  Int?             @map("employee_id")
+  shiftId     BigInt?          @map("shift_id")
+  occurredAt  DateTime         @map("occurred_at") @db.Timestamptz
+  description String?
+  legacySeq   BigInt?          @map("legacy_seq")
+  stay        Stay?            @relation(fields: [stayId], references: [id])
+  employee    Employee?        @relation(fields: [employeeId], references: [id])
+  shift       Shift?           @relation(fields: [shiftId], references: [id])
+
+  @@index([shiftId])
+  @@map("cash_movement")
+}
+
+model LedgerEntry {
+  id          BigInt      @id @default(autoincrement())
+  entryDate   DateTime    @map("entry_date") @db.Date
+  description String
+  amount      Decimal     @db.Decimal(10, 2)
+  costCenter  String?     @map("cost_center")
+  center      CostCenter? @relation(fields: [costCenter], references: [code])
+
+  @@map("ledger_entry")
+}
+
+model WakeUpCall {
+  id         BigInt   @id @default(autoincrement())
+  stayId     BigInt?  @map("stay_id")
+  roomNumber String?  @map("room_number")
+  targetTime DateTime @map("target_time") @db.Timestamptz
+  done       Boolean  @default(false)
+  stay       Stay?    @relation(fields: [stayId], references: [id])
+
+  @@map("wake_up_call")
+}
+
+model EventLog {
+  id          BigInt    @id @default(autoincrement())
+  occurredAt  DateTime  @map("occurred_at") @db.Timestamptz
+  type        String?
+  description String?
+  employeeId  Int?      @map("employee_id")
+  roomNumber  String?   @map("room_number")
+  legacySeq   BigInt?   @map("legacy_seq")
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+
+  @@map("event_log")
+}
