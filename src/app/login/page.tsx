@@ -1,5 +1,9 @@
 import { signIn } from '@/server/auth'
 import { redirect } from 'next/navigation'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
   async function login(formData: FormData) {
@@ -17,13 +21,25 @@ export default function LoginPage() {
     }
   }
   return (
-    <main className="mx-auto mt-24 max-w-sm p-6">
-      <h1 className="mb-4 text-xl font-semibold">MotelAconchego — Entrar</h1>
-      <form action={login} className="flex flex-col gap-3">
-        <input name="username" placeholder="Usuário" className="border p-2 rounded" required />
-        <input name="password" type="password" placeholder="Senha" className="border p-2 rounded" required />
-        <button className="bg-black text-white p-2 rounded">Entrar</button>
-      </form>
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>MotelAconchego — Entrar</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={login} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="username">Usuário</Label>
+              <Input id="username" name="username" placeholder="Usuário" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password">Senha</Label>
+              <Input id="password" name="password" type="password" placeholder="Senha" required />
+            </div>
+            <Button type="submit" className="w-full">Entrar</Button>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   )
 }
