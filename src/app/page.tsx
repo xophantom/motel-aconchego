@@ -11,15 +11,14 @@ async function HomeContent() {
   return (
     <>
       <p className="mt-2">Olá, {me?.name} ({me?.role}).</p>
-      <nav className="mt-4 flex gap-4 items-center">
-        {me?.role === 'manager' && (
-          <Button asChild variant="link" className="px-0">
-            <a href="/users">Funcionários</a>
-          </Button>
-        )}
+      <nav className="mt-4 flex flex-wrap items-center gap-3">
+        <Button asChild variant="link"><a href="/quartos">Painel</a></Button>
+        {me?.role === 'manager' && <Button asChild variant="link"><a href="/tarifas">Tarifas</a></Button>}
+        {me?.role === 'manager' && <Button asChild variant="link"><a href="/users">Funcionários</a></Button>}
         <form action={async () => { 'use server'; await signOut({ redirectTo: '/login' }) }}>
-          <Button type="submit" variant="ghost">Sair</Button>
+          <Button variant="ghost">Sair</Button>
         </form>
+        <ModeToggle />
       </nav>
     </>
   )
