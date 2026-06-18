@@ -1,10 +1,10 @@
 import type { EmployeeRole } from '@/generated/prisma/client'
 
-export type Action = 'users:manage' | 'cash:withdraw' | 'room:status'
+export type Action = 'users:manage' | 'cash:withdraw' | 'room:status' | 'tariff:manage' | 'stay:manage'
 
 const MATRIX: Record<EmployeeRole, Action[]> = {
-  manager:     ['users:manage', 'cash:withdraw', 'room:status'],
-  reception:   ['cash:withdraw', 'room:status'],
+  manager:     ['users:manage', 'cash:withdraw', 'room:status', 'tariff:manage', 'stay:manage'],
+  reception:   ['cash:withdraw', 'room:status', 'stay:manage'],
   housekeeper: ['room:status'],
 }
 
