@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { listCategoriesWithRates } from '@/server/data/tariff'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RateForm } from './rate-form'
+import { CategoryForm } from './category-form'
 
 async function TariffList() {
   await connection()
@@ -15,6 +16,7 @@ async function TariffList() {
         <Card key={c.id}>
           <CardHeader><CardTitle>{c.code} — {c.description} <span className="text-muted-foreground text-sm">({c.billing})</span></CardTitle></CardHeader>
           <CardContent className="grid gap-3">
+            <CategoryForm categoryId={c.id} category={{ billing: c.billing, minPeriodMin: c.minPeriodMin, maxPeriodMin: c.maxPeriodMin, includedGuests: c.includedGuests }} />
             {c.rates.map((r) => (
               <RateForm key={r.day} categoryId={c.id} rate={{
                 day: r.day, basePrice: String(r.basePrice), excessPrice30m: String(r.excessPrice30m),

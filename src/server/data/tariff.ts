@@ -25,10 +25,3 @@ export async function updateRate(categoryId: number, input: UpdateRateInput) {
   const { day, ...prices } = input
   return db.rate.update({ where: { categoryId_day: { categoryId, day } }, data: prices })
 }
-
-// Internal read (no separate authz) — used by the stays DAL at checkout.
-export async function getCategoryWithRate(categoryId: number, day: 'normal' | 'special') {
-  const category = await db.roomCategory.findUniqueOrThrow({ where: { id: categoryId } })
-  const rate = await db.rate.findUniqueOrThrow({ where: { categoryId_day: { categoryId, day } } })
-  return { category, rate }
-}
