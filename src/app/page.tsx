@@ -13,6 +13,7 @@ async function HomeContent() {
       <p className="mt-2">Olá, {me?.name} ({me?.role}).</p>
       <nav className="mt-4 flex flex-wrap items-center gap-3">
         <Button asChild variant="link"><a href="/quartos">Painel</a></Button>
+        {(me?.role === 'manager' || me?.role === 'reception') && <Button asChild variant="link"><a href="/caixa">Caixa</a></Button>}
         {me?.role === 'manager' && <Button asChild variant="link"><a href="/tarifas">Tarifas</a></Button>}
         {me?.role === 'manager' && <Button asChild variant="link"><a href="/users">Funcionários</a></Button>}
         <form action={async () => { 'use server'; await signOut({ redirectTo: '/login' }) }}>
