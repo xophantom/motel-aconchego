@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { computeStayAmount } from '@/lib/billing'
 import type { CheckInInput } from '@/lib/validation/stay'
+import { getOpenShiftFor } from '@/server/data/shifts'
 
 async function requireOps() {
   const me = await getCurrentUser()
@@ -16,6 +17,7 @@ export async function checkIn(input: CheckInInput) {
   const room = await db.room.findUniqueOrThrow({ where: { number: input.roomNumber } })
   if (room.status !== 'free') throw new Error('Room is not free')
   if (!room.categoryId) throw new Error('Room has no category')
+  const openShiftId = (await getOpenShiftFor(new Date()))?.id ?? null
   return db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
       data: {
@@ -33,7 +35,7 @@ export async function checkIn(input: CheckInInput) {
     await tx.room.update({ where: { number: input.roomNumber }, data: { status: 'occupied', currentStayId: stay.id } })
     if (input.prepaidAmount > 0) {
       await tx.cashMovement.create({
-        data: { type: 'stay', stayId: stay.id, amount: input.prepaidAmount, employeeId: me.id, occurredAt: new Date(), description: `Antecipado quarto ${input.roomNumber}` },
+        data: { type: 'stay', stayId: stay.id, amount: input.prepaidAmount, employeeId: me.id, shiftId: openShiftId, occurredAt: new Date(), description: `Antecipado quarto ${input.roomNumber}` },
       })
     }
     return stay
@@ -64,10 +66,11 @@ export async function checkOut(roomNumber: string) {
     guests: stay.guests,
   })
   const balance = stayAmount + Number(stay.consumptionAmount) - Number(stay.prepaidAmount)
+  const openShiftId = (await getOpenShiftFor(checkOutAt))?.id ?? null
   await db.$transaction(async (tx) => {
     await tx.stay.update({ where: { id: stay.id }, data: { checkOut: checkOutAt, stayAmount, status: 'closed', paymentEmployeeId: me.id } })
     await tx.cashMovement.create({
-      data: { type: 'stay', stayId: stay.id, amount: balance, employeeId: me.id, occurredAt: checkOutAt, description: `Saída quarto ${roomNumber}` },
+      data: { type: 'stay', stayId: stay.id, amount: balance, employeeId: me.id, shiftId: openShiftId, occurredAt: checkOutAt, description: `Saída quarto ${roomNumber}` },
     })
     await tx.room.update({ where: { number: roomNumber }, data: { status: 'cleaning', currentStayId: null } })
   })
