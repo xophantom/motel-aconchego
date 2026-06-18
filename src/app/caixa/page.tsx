@@ -14,7 +14,8 @@ async function Caixa() {
   await connection()
   const me = await getCurrentUser()
   let summary, closed
-  try { summary = await currentShiftSummary(); closed = await listClosedShifts(10) } catch { redirect('/') }
+  try { summary = await currentShiftSummary(); closed = await listClosedShifts(10) }
+  catch (e) { if (e instanceof Error && /forbidden/i.test(e.message)) redirect('/'); throw e }
   if (!summary.shift) {
     return (
       <div className="grid gap-6">

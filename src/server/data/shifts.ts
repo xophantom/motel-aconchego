@@ -57,18 +57,25 @@ export type ShiftMetrics = {
 type ShiftLike = { id: bigint; openedAt: Date; closedAt: Date | null; openingBalance: unknown }
 
 export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
-  const checkOutFilter: { gte: Date; lte?: Date } = { gte: shift.openedAt }
-  if (shift.closedAt) checkOutFilter.lte = shift.closedAt
-  const nAptos = await db.stay.count({ where: { status: 'closed', checkOut: checkOutFilter } })
+  const checkoutWhere = shift.closedAt
+    ? { status: 'closed' as const, checkOut: { gte: shift.openedAt, lte: shift.closedAt } }
+    : { status: 'closed' as const, checkOut: { gte: shift.openedAt } }
+  const agg = await db.stay.aggregate({
+    where: checkoutWhere,
+    _count: { _all: true },
+    _sum: { stayAmount: true, consumptionAmount: true },
+  })
+  const nAptos = agg._count._all
+  const totalEstadias = Number(agg._sum.stayAmount ?? 0)
+  const totalConsumo = Number(agg._sum.consumptionAmount ?? 0)
   const movs = await db.cashMovement.findMany({ where: { shiftId: shift.id }, select: { type: true, amount: true } })
   const sum = (t: string) => movs.filter((m) => m.type === t).reduce((a, m) => a + Number(m.amount), 0)
   const round2 = (n: number) => Math.round(n * 100) / 100
-  const totalEstadias = sum('stay')
   const saldo = Number(shift.openingBalance) + movs.reduce((a, m) => a + Number(m.amount), 0)
   return {
     nAptos,
     totalEstadias: round2(totalEstadias),
-    totalConsumo: round2(sum('consumption')),
+    totalConsumo: round2(totalConsumo),
     totalSangrias: round2(sum('withdrawal')),
     totalSuprimentos: round2(sum('supply')),
     totalCorrecoes: round2(sum('correction')),

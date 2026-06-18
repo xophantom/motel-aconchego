@@ -47,9 +47,9 @@ describe('shifts DAL', () => {
     // two stays checked out during the shift window, one before it
     const within = new Date(s.openedAt.getTime() + 60_000)
     const before = new Date(s.openedAt.getTime() - 60_000)
-    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: within, status: 'closed', day: 'normal', guests: 2 } })
-    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: within, status: 'closed', day: 'normal', guests: 2 } })
-    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: before, status: 'closed', day: 'normal', guests: 2 } })
+    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 75 } })
+    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 85 } })
+    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: before, status: 'closed', day: 'normal', guests: 2, stayAmount: 999 } })
     // stay revenue movements in the shift
     await db.cashMovement.create({ data: { type: 'stay', amount: 75, employeeId: 1, shiftId: s.id, occurredAt: within } })
     await db.cashMovement.create({ data: { type: 'stay', amount: 85, employeeId: 1, shiftId: s.id, occurredAt: within } })
