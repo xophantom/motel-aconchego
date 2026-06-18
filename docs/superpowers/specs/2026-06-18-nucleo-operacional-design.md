@@ -71,8 +71,9 @@ return round2(stay)
 - `checkIn`: cria `stay` (status `open`, `roomNumber`, `categoryId`, `checkIn=now`, `day`, `guests`,
   `prepaidAmount`, `entryEmployeeId=me`, `customerId?`); `room.status='occupied'`, `room.currentStayId=stay.id`.
 - `checkOut`: `stay.checkOut=now`; `stayAmount=computeStayAmount(...)`; `status='closed'`;
-  `paymentEmployeeId=me`; cria `cash_movement` (type `stay`, amount `stayAmount+consumptionAmount`, operador=me);
-  `room.status='cleaning'`, `room.currentStayId=null`.
+  `paymentEmployeeId=me`; cria `cash_movement` do **saldo** (type `stay`,
+  amount `stayAmount + consumptionAmount − prepaidAmount`, operador=me) — o antecipado já virou
+  movimento no check-in; os dois somam o total; `room.status='cleaning'`, `room.currentStayId=null`.
 
 ## Server Actions
 - `src/app/quartos/actions.ts`: `checkInAction`, `checkOutAction`, `setRoomStatusAction` — Zod, chamam DAL, `revalidatePath('/quartos')`.
