@@ -2,20 +2,26 @@ import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { listRoomsWithCurrentStay } from '@/server/data/rooms'
+import { listProducts } from '@/server/data/products'
+import { listConsumption } from '@/server/data/consumption'
 import { RoomGrid } from './room-grid'
 
 async function Board() {
   await connection()
   let rooms
   try { rooms = await listRoomsWithCurrentStay() } catch { redirect('/login') }
-  const data = rooms.map((r) => ({
+  const products = await listProducts()
+  const data = await Promise.all(rooms.map(async (r) => ({
     number: r.number,
     status: r.status,
     maintenanceReason: r.maintenanceReason,
     category: r.category ? { code: r.category.code, description: r.category.description } : null,
-    currentStay: r.currentStay ? { checkIn: r.currentStay.checkIn.toISOString(), guests: r.currentStay.guests, day: r.currentStay.day } : null,
-  }))
-  return <RoomGrid rooms={data} />
+    currentStay: r.currentStay ? { id: String(r.currentStay.id), checkIn: r.currentStay.checkIn.toISOString(), guests: r.currentStay.guests, day: r.currentStay.day } : null,
+    consumption: r.currentStay
+      ? (await listConsumption(r.currentStay.id)).map((c) => ({ id: String(c.id), description: c.product?.description ?? c.productCode ?? '?', qty: c.qty, unitPrice: Number(c.unitPrice) }))
+      : [],
+  })))
+  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} />
 }
 
 export default function QuartosPage() {

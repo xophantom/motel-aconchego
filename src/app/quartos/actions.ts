@@ -5,6 +5,8 @@ import { z } from 'zod'
 import * as stays from '@/server/data/stays'
 import { setRoomStatus } from '@/server/data/rooms'
 import type { RoomStatus } from '@/generated/prisma/client'
+import { addConsumptionSchema } from '@/lib/validation/product'
+import { addConsumption, removeConsumption, walkinSale } from '@/server/data/consumption'
 
 export type ActionState = { ok: boolean; error?: string }
 
@@ -41,6 +43,29 @@ export async function setRoomStatusAction(_prev: ActionState, fd: FormData): Pro
   if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
   try { await setRoomStatus(parsed.data.number, parsed.data.status as RoomStatus, parsed.data.reason) }
   catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function addConsumptionAction(stayId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const parsed = addConsumptionSchema.safeParse({ productCode: fd.get('productCode'), qty: fd.get('qty') })
+  if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
+  try { await addConsumption({ stayId: BigInt(stayId), ...parsed.data }) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function removeConsumptionAction(id: string): Promise<ActionState> {
+  try { await removeConsumption(BigInt(id)) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function walkinSaleAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  let items: { productCode: string; qty: number }[]
+  try { items = JSON.parse(String(fd.get('items') ?? '[]')) } catch { return { ok: false, error: 'Itens inválidos.' } }
+  if (!Array.isArray(items) || items.length === 0) return { ok: false, error: 'Adicione ao menos um item.' }
+  try { await walkinSale({ items }) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }
