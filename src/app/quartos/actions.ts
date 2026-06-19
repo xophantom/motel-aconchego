@@ -62,10 +62,12 @@ export async function removeConsumptionAction(id: string): Promise<ActionState> 
 }
 
 export async function walkinSaleAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  let items: { productCode: string; qty: number }[]
+  let items: unknown
   try { items = JSON.parse(String(fd.get('items') ?? '[]')) } catch { return { ok: false, error: 'Itens inválidos.' } }
-  if (!Array.isArray(items) || items.length === 0) return { ok: false, error: 'Adicione ao menos um item.' }
-  try { await walkinSale({ items }) } catch (e) { return { ok: false, error: mapErr(e) } }
+  const itemsSchema = z.array(z.object({ productCode: z.string().min(1), qty: z.number().int().min(1) })).min(1)
+  const valid = itemsSchema.safeParse(items)
+  if (!valid.success) return { ok: false, error: 'Itens inválidos.' }
+  try { await walkinSale({ items: valid.data }) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }

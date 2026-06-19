@@ -30,6 +30,12 @@ export async function listConsumption(stayId: bigint) {
   return db.consumption.findMany({ where: { stayId }, orderBy: { createdAt: 'asc' }, include: { product: { select: { description: true } } } })
 }
 
+export async function listConsumptionForStays(stayIds: bigint[]) {
+  await requireOps()
+  if (stayIds.length === 0) return []
+  return db.consumption.findMany({ where: { stayId: { in: stayIds } }, orderBy: { createdAt: 'asc' }, include: { product: { select: { description: true } } } })
+}
+
 export async function removeConsumption(id: bigint) {
   await requireOps()
   const item = await db.consumption.findUniqueOrThrow({ where: { id }, include: { stay: true } })
@@ -49,6 +55,11 @@ export async function walkinSale(input: { items: { productCode: string; qty: num
   const me = await requireOps()
   if (input.items.length === 0) throw new Error('Empty sale')
   const products = await db.product.findMany({ where: { code: { in: input.items.map((i) => i.productCode) } } })
+  const codes = new Set(products.map((p) => p.code))
+  for (const i of input.items) {
+    if (!codes.has(i.productCode)) throw new Error('Produto inválido')
+    if (!Number.isInteger(i.qty) || i.qty < 1) throw new Error('Quantidade inválida')
+  }
   const priceOf = (code: string) => Number(products.find((p) => p.code === code)?.price ?? 0)
   const total = input.items.reduce((a, i) => a + priceOf(i.productCode) * i.qty, 0)
   const now = new Date()

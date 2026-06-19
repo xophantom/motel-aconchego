@@ -57,6 +57,9 @@ describe('walk-in sale', () => {
   it('rejects an empty sale', async () => {
     await expect(walkinSale({ items: [] })).rejects.toThrow(/empty/i)
   })
+  it('rejects an unknown product code', async () => {
+    await expect(walkinSale({ items: [{ productCode: 'ZZZ', qty: 1 }] })).rejects.toThrow(/inválido/i)
+  })
 })
 
 describe('shiftMetrics excludes walk-ins from nAptos but includes their consumo', () => {

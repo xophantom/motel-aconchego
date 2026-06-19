@@ -3,7 +3,7 @@ import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { listRoomsWithCurrentStay } from '@/server/data/rooms'
 import { listProducts } from '@/server/data/products'
-import { listConsumption } from '@/server/data/consumption'
+import { listConsumptionForStays } from '@/server/data/consumption'
 import { RoomGrid } from './room-grid'
 
 async function Board() {
@@ -11,16 +11,23 @@ async function Board() {
   let rooms
   try { rooms = await listRoomsWithCurrentStay() } catch { redirect('/login') }
   const products = await listProducts()
-  const data = await Promise.all(rooms.map(async (r) => ({
+  const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
+  const allCons = await listConsumptionForStays(openStayIds)
+  const byStay = new Map<string, { id: string; description: string; qty: number; unitPrice: number }[]>()
+  for (const c of allCons) {
+    const key = String(c.stayId)
+    const arr = byStay.get(key) ?? []
+    arr.push({ id: String(c.id), description: c.product?.description ?? c.productCode ?? '?', qty: c.qty, unitPrice: Number(c.unitPrice) })
+    byStay.set(key, arr)
+  }
+  const data = rooms.map((r) => ({
     number: r.number,
     status: r.status,
     maintenanceReason: r.maintenanceReason,
     category: r.category ? { code: r.category.code, description: r.category.description } : null,
     currentStay: r.currentStay ? { id: String(r.currentStay.id), checkIn: r.currentStay.checkIn.toISOString(), guests: r.currentStay.guests, day: r.currentStay.day } : null,
-    consumption: r.currentStay
-      ? (await listConsumption(r.currentStay.id)).map((c) => ({ id: String(c.id), description: c.product?.description ?? c.productCode ?? '?', qty: c.qty, unitPrice: Number(c.unitPrice) }))
-      : [],
-  })))
+    consumption: r.currentStay ? (byStay.get(String(r.currentStay.id)) ?? []) : [],
+  }))
   return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} />
 }
 
