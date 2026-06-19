@@ -60,14 +60,11 @@ export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
   const checkoutWhere = shift.closedAt
     ? { status: 'closed' as const, checkOut: { gte: shift.openedAt, lte: shift.closedAt } }
     : { status: 'closed' as const, checkOut: { gte: shift.openedAt } }
-  const agg = await db.stay.aggregate({
-    where: checkoutWhere,
-    _count: { _all: true },
-    _sum: { stayAmount: true, consumptionAmount: true },
-  })
-  const nAptos = agg._count._all
-  const totalEstadias = Number(agg._sum.stayAmount ?? 0)
-  const totalConsumo = Number(agg._sum.consumptionAmount ?? 0)
+  const roomAgg = await db.stay.aggregate({ where: { ...checkoutWhere, type: 'room' }, _count: { _all: true }, _sum: { stayAmount: true } })
+  const consumoAgg = await db.stay.aggregate({ where: checkoutWhere, _sum: { consumptionAmount: true } })
+  const nAptos = roomAgg._count._all
+  const totalEstadias = Number(roomAgg._sum.stayAmount ?? 0)
+  const totalConsumo = Number(consumoAgg._sum.consumptionAmount ?? 0)
   const movs = await db.cashMovement.findMany({ where: { shiftId: shift.id }, select: { type: true, amount: true } })
   const sum = (t: string) => movs.filter((m) => m.type === t).reduce((a, m) => a + Number(m.amount), 0)
   const round2 = (n: number) => Math.round(n * 100) / 100
