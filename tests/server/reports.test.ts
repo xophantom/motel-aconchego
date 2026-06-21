@@ -39,4 +39,9 @@ describe('monthlyOccupancy', () => {
     session.current = { id: 2, name: 'R', role: 'reception' }
     await expect(monthlyOccupancy(2026, 6)).rejects.toThrow(/forbidden/i)
   })
+  it('clamps an out-of-range month to december (no 2034 projection)', async () => {
+    const rep = await monthlyOccupancy(2026, 99)
+    expect(rep.month).toBe(12)
+    expect(rep.rows).toHaveLength(0) // fixtures are all in June -> December window is empty
+  })
 })

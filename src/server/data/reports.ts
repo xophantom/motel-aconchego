@@ -23,6 +23,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 export async function monthlyOccupancy(year: number, month: number): Promise<MonthlyReport> {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'report:view')) throw new Error('Forbidden')
+  month = Math.min(12, Math.max(1, Math.trunc(month)))
+  year = Math.min(2100, Math.max(2000, Math.trunc(year)))
   const start = new Date(year, month - 1, 1)
   const end = new Date(year, month, 1)
   const stays = await db.stay.findMany({
@@ -40,7 +42,7 @@ export async function monthlyOccupancy(year: number, month: number): Promise<Mon
   }
   const rows = [...byRoom.values()]
     .map((r) => ({ ...r, totalStay: round2(r.totalStay), totalConsumption: round2(r.totalConsumption), avgTicket: r.rentals > 0 ? round2(r.totalStay / r.rentals) : 0 }))
-    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber))
+    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
   const tRentals = rows.reduce((a, r) => a + r.rentals, 0)
   const tStay = round2(rows.reduce((a, r) => a + r.totalStay, 0))
   const tCons = round2(rows.reduce((a, r) => a + r.totalConsumption, 0))

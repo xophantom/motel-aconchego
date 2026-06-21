@@ -17,7 +17,7 @@ async function Report({ searchParams }: { searchParams: Promise<{ year?: string;
   const year = Number(sp.year) || now.getFullYear()
   const month = Number(sp.month) || now.getMonth() + 1
   let rep
-  try { rep = await monthlyOccupancy(year, month) } catch { redirect('/') }
+  try { rep = await monthlyOccupancy(year, month) } catch (e) { if (e instanceof Error && /forbidden/i.test(e.message)) redirect('/'); throw e }
   const qs = `year=${year}&month=${month}`
   return (
     <div className="grid gap-6">
