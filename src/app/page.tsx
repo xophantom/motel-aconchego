@@ -16,6 +16,7 @@ async function HomeContent() {
         {(me?.role === 'manager' || me?.role === 'reception') && <Button asChild variant="link"><a href="/caixa">Caixa</a></Button>}
         {me?.role === 'manager' && <Button asChild variant="link"><a href="/tarifas">Tarifas</a></Button>}
         {me?.role === 'manager' && <Button asChild variant="link"><a href="/produtos">Produtos</a></Button>}
+        {me?.role === 'manager' && <Button asChild variant="link"><a href="/relatorios">Relatórios</a></Button>}
         {me?.role === 'manager' && <Button asChild variant="link"><a href="/users">Funcionários</a></Button>}
         <form action={async () => { 'use server'; await signOut({ redirectTo: '/login' }) }}>
           <Button variant="ghost">Sair</Button>

@@ -3,8 +3,6 @@ import { can } from '@/lib/rbac'
 import { monthlyOccupancy } from '@/server/data/reports'
 import { buildReportPdf } from '@/lib/report-pdf'
 
-export const runtime = 'nodejs'
-
 export async function GET(req: Request) {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'report:view')) return new Response('Forbidden', { status: 403 })
