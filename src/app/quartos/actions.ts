@@ -22,7 +22,7 @@ function mapErr(e: unknown): string {
 
 export async function checkInAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const parsed = checkInSchema.safeParse({
-    roomNumber: fd.get('roomNumber'), day: fd.get('day'), guests: fd.get('guests'), prepaidAmount: fd.get('prepaidAmount') ?? 0,
+    roomNumber: fd.get('roomNumber'), day: fd.get('day'), chargeMode: fd.get('chargeMode') ?? 'period', guests: fd.get('guests'), prepaidAmount: fd.get('prepaidAmount') ?? 0,
   })
   if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
   try { await stays.checkIn(parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }

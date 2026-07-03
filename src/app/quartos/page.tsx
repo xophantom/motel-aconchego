@@ -4,12 +4,16 @@ import { redirect } from 'next/navigation'
 import { listRoomsWithCurrentStay } from '@/server/data/rooms'
 import { listProducts } from '@/server/data/products'
 import { listConsumptionForStays } from '@/server/data/consumption'
+import { listCategoriesForBoard } from '@/server/data/tariff'
 import { RoomGrid } from './room-grid'
 
 async function Board() {
   await connection()
-  let rooms
-  try { rooms = await listRoomsWithCurrentStay() } catch { redirect('/login') }
+  let rooms, cats
+  try {
+    rooms = await listRoomsWithCurrentStay()
+    cats = await listCategoriesForBoard()
+  } catch { redirect('/login') }
   const products = await listProducts()
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
   const allCons = await listConsumptionForStays(openStayIds)
@@ -20,20 +24,31 @@ async function Board() {
     arr.push({ id: String(c.id), description: c.product?.description ?? c.productCode ?? '?', qty: c.qty, unitPrice: Number(c.unitPrice) })
     byStay.set(key, arr)
   }
-  const data = rooms.map((r) => ({
-    number: r.number,
-    status: r.status,
-    maintenanceReason: r.maintenanceReason,
-    category: r.category ? { code: r.category.code, description: r.category.description } : null,
-    currentStay: r.currentStay ? { id: String(r.currentStay.id), checkIn: r.currentStay.checkIn.toISOString(), guests: r.currentStay.guests, day: r.currentStay.day } : null,
-    consumption: r.currentStay ? (byStay.get(String(r.currentStay.id)) ?? []) : [],
-  }))
+  const catById = new Map(cats.map((c) => [c.id, c]))
+  const data = rooms.map((r) => {
+    const s = r.currentStay
+    let pricing = null
+    if (s?.categoryId != null) {
+      const cat = catById.get(s.categoryId)
+      const rate = cat?.rates.find((rr) => rr.day === s.day)
+      if (cat && rate) pricing = { billing: cat.billing, minPeriodMin: cat.minPeriodMin, maxPeriodMin: cat.maxPeriodMin, includedGuests: cat.includedGuests, ...rate }
+    }
+    return {
+      number: r.number,
+      status: r.status,
+      maintenanceReason: r.maintenanceReason,
+      category: r.category ? { code: r.category.code, description: r.category.description } : null,
+      currentStay: s ? { id: String(s.id), checkIn: s.checkIn.toISOString(), guests: s.guests, day: s.day, chargeMode: s.chargeMode, prepaid: Number(s.prepaidAmount), consumptionAmount: Number(s.consumptionAmount) } : null,
+      pricing,
+      consumption: s ? (byStay.get(String(s.id)) ?? []) : [],
+    }
+  })
   return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} />
 }
 
 export default function QuartosPage() {
   return (
-    <main className="mx-auto mt-8 max-w-5xl p-6">
+    <main className="mx-auto mt-8 max-w-6xl p-6">
       <h1 className="mb-4 text-xl font-semibold">Quartos</h1>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <Board />
