@@ -47,3 +47,18 @@ describe('computeStayAmount hotel', () => {
     expect(hotel(0, 2880)).toBe(320)
   })
 })
+
+describe('computeStayAmount charge mode', () => {
+  const overnight = (checkInMin: number, checkOutMin: number, guests = 2) =>
+    computeStayAmount({ billing: 'motel', chargeMode: 'overnight', ...baseCat, rate, checkIn: at(checkInMin), checkOut: at(checkOutMin), guests })
+  it('overnight charges the flat overnight price regardless of duration', () => {
+    expect(overnight(0, 30)).toBe(160)     // short stay, still overnight price
+    expect(overnight(0, 600)).toBe(160)
+  })
+  it('overnight still adds extra-guest price', () => {
+    expect(overnight(0, 30, 3)).toBe(185)  // 160 + 1*25
+  })
+  it('period mode (default) is unchanged', () => {
+    expect(computeStayAmount({ billing: 'motel', ...baseCat, rate, checkIn: at(0), checkOut: at(181), guests: 2 })).toBe(90)
+  })
+})

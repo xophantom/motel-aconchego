@@ -70,6 +70,13 @@ enum ShiftPeriod {
   @@map("shift_period")
 }
 
+enum ChargeMode {
+  period
+  overnight
+
+  @@map("charge_mode")
+}
+
 model RoomCategory {
   id             Int         @id @default(autoincrement()) @db.SmallInt
   code           String      @unique @db.Char(1)
@@ -186,6 +193,7 @@ model Stay {
   checkIn           DateTime      @map("check_in") @db.Timestamptz
   checkOut          DateTime?     @map("check_out") @db.Timestamptz
   day               DayType       @default(normal)
+  chargeMode        ChargeMode    @default(period) @map("charge_mode")
   guests            Int           @default(2) @db.SmallInt
   prepaidAmount     Decimal       @default(0) @map("prepaid_amount") @db.Decimal(10, 2)
   stayAmount        Decimal?      @map("stay_amount") @db.Decimal(10, 2)

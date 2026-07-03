@@ -59,4 +59,11 @@ describe('check-out', () => {
     const movs = await db.cashMovement.findMany({ orderBy: { id: 'asc' } })
     expect(movs.map((m) => Number(m.amount))).toEqual([30, 45])
   })
+
+  it('overnight stay is charged the flat overnight price', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', chargeMode: 'overnight', guests: 2, prepaidAmount: 0 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
+    const { stayAmount } = await checkOut('01')
+    expect(stayAmount).toBe(160) // overnightPrice, not the 30-min base
+  })
 })

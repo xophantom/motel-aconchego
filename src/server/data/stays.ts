@@ -12,7 +12,7 @@ async function requireOps() {
   return me
 }
 
-export async function checkIn(input: CheckInInput) {
+export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { chargeMode?: 'period' | 'overnight' }) {
   const me = await requireOps()
   const room = await db.room.findUniqueOrThrow({ where: { number: input.roomNumber } })
   if (room.status !== 'free') throw new Error('Room is not free')
@@ -26,6 +26,7 @@ export async function checkIn(input: CheckInInput) {
         categoryId: room.categoryId,
         checkIn: new Date(),
         day: input.day,
+        chargeMode: input.chargeMode ?? 'period',
         guests: input.guests,
         prepaidAmount: input.prepaidAmount,
         status: 'open',
@@ -52,6 +53,7 @@ export async function checkOut(roomNumber: string) {
   const checkOutAt = new Date()
   const stayAmount = computeStayAmount({
     billing: cat.billing,
+    chargeMode: stay.chargeMode,
     minPeriodMin: cat.minPeriodMin,
     maxPeriodMin: cat.maxPeriodMin,
     includedGuests: cat.includedGuests,

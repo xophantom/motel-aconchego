@@ -14,6 +14,7 @@ export type BillingInput = {
   checkIn: Date
   checkOut: Date
   guests: number
+  chargeMode?: 'period' | 'overnight'
 }
 
 function round2(n: number): number {
@@ -28,8 +29,9 @@ export function computeStayAmount(i: BillingInput): number {
   const dur = durationMinutes(i.checkIn, i.checkOut)
   let stay: number
   if (i.billing === 'hotel') {
-    const days = Math.max(1, Math.ceil(dur / 1440))
-    stay = days * i.rate.overnightPrice
+    stay = Math.max(1, Math.ceil(dur / 1440)) * i.rate.overnightPrice
+  } else if (i.chargeMode === 'overnight') {
+    stay = i.rate.overnightPrice
   } else if (dur <= i.minPeriodMin) {
     stay = i.rate.basePrice
   } else {
