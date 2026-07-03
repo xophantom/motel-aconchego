@@ -9,6 +9,7 @@ import { buildReportPdf } from '@/lib/report-pdf'
 import { monthlyOccupancy } from '@/server/data/reports'
 
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.consumption.deleteMany(); await db.stay.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany()
   await db.room.create({ data: { number: '01', status: 'free' } })

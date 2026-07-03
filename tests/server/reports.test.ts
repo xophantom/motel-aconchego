@@ -7,6 +7,7 @@ import { db } from '@/server/db'
 import { monthlyOccupancy } from '@/server/data/reports'
 
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.consumption.deleteMany(); await db.stay.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany()
   const cat = await db.roomCategory.create({ data: { code: 'C', description: 'Rust', billing: 'motel', minPeriodMin: 180, maxPeriodMin: 720, includedGuests: 2 } })

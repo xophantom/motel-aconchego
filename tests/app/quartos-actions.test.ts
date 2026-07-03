@@ -8,6 +8,7 @@ import { db } from '@/server/db'
 import { checkInAction, setRoomStatusAction } from '@/app/quartos/actions'
 
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.stay.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany(); await db.employee.deleteMany()
   await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })

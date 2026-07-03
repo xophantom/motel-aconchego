@@ -9,6 +9,7 @@ import { openShift, currentShiftSummary } from '@/server/data/shifts'
 
 let stayId: bigint
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.consumption.deleteMany(); await db.stay.deleteMany()
   await db.shift.deleteMany(); await db.product.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany(); await db.employee.deleteMany()

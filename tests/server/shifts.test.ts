@@ -7,6 +7,7 @@ import { db } from '@/server/db'
 import { openShift, closeShift, addCashMovement, currentShiftSummary, getOpenShiftFor } from '@/server/data/shifts'
 
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.stay.deleteMany(); await db.shift.deleteMany(); await db.employee.deleteMany()
   await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
   session.current = { id: 1, name: 'Boss', role: 'reception' }

@@ -7,6 +7,7 @@ import { db } from '@/server/db'
 import { listRoomsWithCurrentStay, setRoomStatus } from '@/server/data/rooms'
 
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.stay.deleteMany(); await db.room.deleteMany(); await db.rate.deleteMany(); await db.roomCategory.deleteMany()
   await db.room.create({ data: { number: '01', status: 'free' } })
   session.current = { id: 1, name: 'Boss', role: 'reception' }

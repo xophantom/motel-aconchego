@@ -122,11 +122,13 @@ model Employee {
 }
 
 model Customer {
-  id       BigInt  @id @default(autoincrement())
-  name     String?
-  document String?
-  phone    String?
-  stays    Stay[]
+  id          BigInt              @id @default(autoincrement())
+  name        String?
+  document    String?
+  phone       String?
+  plate       String?             @unique
+  stays       Stay[]
+  redemptions LoyaltyRedemption[]
 
   @@map("customer")
 }
@@ -194,6 +196,7 @@ model Stay {
   checkOut          DateTime?     @map("check_out") @db.Timestamptz
   day               DayType       @default(normal)
   chargeMode        ChargeMode    @default(period) @map("charge_mode")
+  discountPercent   Int           @default(0) @map("discount_percent")
   guests            Int           @default(2) @db.SmallInt
   prepaidAmount     Decimal       @default(0) @map("prepaid_amount") @db.Decimal(10, 2)
   stayAmount        Decimal?      @map("stay_amount") @db.Decimal(10, 2)
@@ -213,6 +216,7 @@ model Stay {
   consumptions      Consumption[]
   movements         CashMovement[]
   wakeUps           WakeUpCall[]
+  redemptions       LoyaltyRedemption[]
 
   @@index([roomNumber, checkIn])
   @@index([customerId])
@@ -284,4 +288,27 @@ model EventLog {
   employee    Employee? @relation(fields: [employeeId], references: [id])
 
   @@map("event_log")
+}
+
+model LoyaltyTier {
+  id              Int    @id @default(autoincrement())
+  minVisits       Int    @unique @map("min_visits")
+  discountPercent Int    @map("discount_percent")
+  redemptions     LoyaltyRedemption[]
+
+  @@map("loyalty_tier")
+}
+
+model LoyaltyRedemption {
+  id         BigInt   @id @default(autoincrement())
+  customerId BigInt   @map("customer_id")
+  tierId     Int      @map("tier_id")
+  stayId     BigInt   @map("stay_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  tier       LoyaltyTier @relation(fields: [tierId], references: [id])
+  stay       Stay        @relation(fields: [stayId], references: [id])
+
+  @@unique([customerId, tierId])
+  @@map("loyalty_redemption")
 }

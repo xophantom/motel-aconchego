@@ -8,6 +8,7 @@ import { checkIn, checkOut } from '@/server/data/stays'
 
 let categoryId: number
 beforeEach(async () => {
+  await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.stay.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany(); await db.employee.deleteMany()
   await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
@@ -65,5 +66,12 @@ describe('check-out', () => {
     await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
     const { stayAmount } = await checkOut('01')
     expect(stayAmount).toBe(160) // overnightPrice, not the 30-min base
+  })
+
+  it('applies the loyalty discount to the stay value only', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', chargeMode: 'overnight', guests: 2, prepaidAmount: 0 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000), discountPercent: 50 } })
+    const { stayAmount } = await checkOut('01')
+    expect(stayAmount).toBe(80) // 160 overnight * 50% off
   })
 })

@@ -1,9 +1,9 @@
 import type { EmployeeRole } from '@/generated/prisma/client'
 
-export type Action = 'users:manage' | 'cash:withdraw' | 'room:status' | 'tariff:manage' | 'stay:manage' | 'cash:manage' | 'product:manage' | 'report:view'
+export type Action = 'users:manage' | 'cash:withdraw' | 'room:status' | 'tariff:manage' | 'stay:manage' | 'cash:manage' | 'product:manage' | 'report:view' | 'loyalty:manage'
 
 const MATRIX: Record<EmployeeRole, Action[]> = {
-  manager:     ['users:manage', 'cash:withdraw', 'room:status', 'tariff:manage', 'stay:manage', 'cash:manage', 'product:manage', 'report:view'],
+  manager:     ['users:manage', 'cash:withdraw', 'room:status', 'tariff:manage', 'stay:manage', 'cash:manage', 'product:manage', 'report:view', 'loyalty:manage'],
   reception:   ['cash:withdraw', 'room:status', 'stay:manage', 'cash:manage'],
   housekeeper: ['room:status'],
 }

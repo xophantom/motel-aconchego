@@ -51,7 +51,7 @@ export async function checkOut(roomNumber: string) {
   const cat = room.category
   const rate = await db.rate.findUniqueOrThrow({ where: { categoryId_day: { categoryId: cat.id, day: stay.day } } })
   const checkOutAt = new Date()
-  const stayAmount = computeStayAmount({
+  const rawStayAmount = computeStayAmount({
     billing: cat.billing,
     chargeMode: stay.chargeMode,
     minPeriodMin: cat.minPeriodMin,
@@ -67,6 +67,8 @@ export async function checkOut(roomNumber: string) {
     checkOut: checkOutAt,
     guests: stay.guests,
   })
+  const discount = stay.discountPercent ?? 0
+  const stayAmount = discount > 0 ? Math.round(rawStayAmount * (1 - discount / 100) * 100) / 100 : rawStayAmount
   const balance = stayAmount + Number(stay.consumptionAmount) - Number(stay.prepaidAmount)
   const openShiftId = (await getOpenShiftFor(checkOutAt))?.id ?? null
   await db.$transaction(async (tx) => {
