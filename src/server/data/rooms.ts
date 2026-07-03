@@ -14,7 +14,7 @@ export async function listRoomsWithCurrentStay() {
       status: true,
       maintenanceReason: true,
       category: { select: { code: true, description: true } },
-      currentStay: { select: { id: true, checkIn: true, guests: true, day: true, chargeMode: true, categoryId: true, prepaidAmount: true, consumptionAmount: true } },
+      currentStay: { select: { id: true, checkIn: true, guests: true, day: true, chargeMode: true, categoryId: true, prepaidAmount: true, consumptionAmount: true, customerId: true, discountPercent: true, customer: { select: { plate: true } } } },
     },
   })
 }

@@ -5,6 +5,7 @@ import { listRoomsWithCurrentStay } from '@/server/data/rooms'
 import { listProducts } from '@/server/data/products'
 import { listConsumptionForStays } from '@/server/data/consumption'
 import { listCategoriesForBoard } from '@/server/data/tariff'
+import { availableTiers } from '@/server/data/loyalty'
 import { RoomGrid } from './room-grid'
 
 async function Board() {
@@ -25,7 +26,7 @@ async function Board() {
     byStay.set(key, arr)
   }
   const catById = new Map(cats.map((c) => [c.id, c]))
-  const data = rooms.map((r) => {
+  const data = await Promise.all(rooms.map(async (r) => {
     const s = r.currentStay
     let pricing = null
     if (s?.categoryId != null) {
@@ -33,16 +34,22 @@ async function Board() {
       const rate = cat?.rates.find((rr) => rr.day === s.day)
       if (cat && rate) pricing = { billing: cat.billing, minPeriodMin: cat.minPeriodMin, maxPeriodMin: cat.maxPeriodMin, includedGuests: cat.includedGuests, ...rate }
     }
+    let loyalty = null
+    if (s?.customerId && s.customer?.plate) {
+      const av = await availableTiers(s.customerId, s.id)
+      loyalty = { plate: s.customer.plate, visits: av.visits, tiers: av.tiers.map((t) => ({ id: t.id, minVisits: t.minVisits, discountPercent: t.discountPercent })), appliedDiscount: s.discountPercent }
+    }
     return {
       number: r.number,
       status: r.status,
       maintenanceReason: r.maintenanceReason,
       category: r.category ? { code: r.category.code, description: r.category.description } : null,
-      currentStay: s ? { id: String(s.id), checkIn: s.checkIn.toISOString(), guests: s.guests, day: s.day, chargeMode: s.chargeMode, prepaid: Number(s.prepaidAmount), consumptionAmount: Number(s.consumptionAmount) } : null,
+      currentStay: s ? { id: String(s.id), checkIn: s.checkIn.toISOString(), guests: s.guests, day: s.day, chargeMode: s.chargeMode, prepaid: Number(s.prepaidAmount), consumptionAmount: Number(s.consumptionAmount), discountPercent: s.discountPercent } : null,
       pricing,
       consumption: s ? (byStay.get(String(s.id)) ?? []) : [],
+      loyalty,
     }
-  })
+  }))
   return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} />
 }
 

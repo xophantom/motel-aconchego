@@ -7,6 +7,7 @@ import { setRoomStatus } from '@/server/data/rooms'
 import type { RoomStatus } from '@/generated/prisma/client'
 import { addConsumptionSchema } from '@/lib/validation/product'
 import { addConsumption, removeConsumption, walkinSale } from '@/server/data/consumption'
+import { redeemTier, availableTiers } from '@/server/data/loyalty'
 
 export type ActionState = { ok: boolean; error?: string }
 
@@ -22,10 +23,24 @@ function mapErr(e: unknown): string {
 
 export async function checkInAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const parsed = checkInSchema.safeParse({
-    roomNumber: fd.get('roomNumber'), day: fd.get('day'), chargeMode: fd.get('chargeMode') ?? 'period', guests: fd.get('guests'), prepaidAmount: fd.get('prepaidAmount') ?? 0,
+    roomNumber: fd.get('roomNumber'), day: fd.get('day'), chargeMode: fd.get('chargeMode') ?? 'period', guests: fd.get('guests'), prepaidAmount: fd.get('prepaidAmount') ?? 0, plate: fd.get('plate') ?? undefined,
   })
   if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
   try { await stays.checkIn(parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function applyBenefitAction(roomNumber: string, tierId: number): Promise<ActionState> {
+  try {
+    const room = await (await import('@/server/db')).db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true } })
+    const stay = room.currentStay
+    if (!stay || stay.status !== 'open' || !stay.customerId) return { ok: false, error: 'Sem cliente na estadia.' }
+    const av = await availableTiers(stay.customerId, stay.id)
+    if (!av.tiers.some((t) => t.id === tierId)) return { ok: false, error: 'Benefício indisponível.' }
+    const pct = await redeemTier({ customerId: stay.customerId, tierId, stayId: stay.id })
+    await (await import('@/server/db')).db.stay.update({ where: { id: stay.id }, data: { discountPercent: pct } })
+  } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }

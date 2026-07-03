@@ -9,12 +9,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
-import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, type ActionState } from './actions'
+import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
 type Pricing = { billing: 'motel' | 'hotel'; minPeriodMin: number; maxPeriodMin: number; includedGuests: number; basePrice: number; excessPrice30m: number; overnightPrice: number; extraGuestPrice: number }
-type Stay = { id: string; checkIn: string; guests: number; day: 'normal' | 'special'; chargeMode: 'period' | 'overnight'; prepaid: number; consumptionAmount: number }
+type Stay = { id: string; checkIn: string; guests: number; day: 'normal' | 'special'; chargeMode: 'period' | 'overnight'; prepaid: number; consumptionAmount: number; discountPercent: number }
+type Loyalty = { plate: string; visits: number; tiers: { id: number; minVisits: number; discountPercent: number }[]; appliedDiscount: number }
 type Room = {
   number: string
   status: 'free' | 'occupied' | 'cleaning' | 'maintenance'
@@ -23,6 +24,7 @@ type Room = {
   currentStay: Stay | null
   pricing: Pricing | null
   consumption: ConsItem[]
+  loyalty: Loyalty | null
 }
 
 const STATUS_LABEL: Record<Room['status'], string> = { free: 'Livre', occupied: 'Ocupado', cleaning: 'Limpeza', maintenance: 'Manutenção' }
@@ -40,11 +42,12 @@ function elapsedLabel(checkIn: string, now: number) {
   return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`
 }
 function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
-  return computeStayAmount({
+  const base = computeStayAmount({
     billing: pricing.billing, chargeMode: stay.chargeMode, minPeriodMin: pricing.minPeriodMin, maxPeriodMin: pricing.maxPeriodMin,
     includedGuests: pricing.includedGuests, rate: { basePrice: pricing.basePrice, excessPrice30m: pricing.excessPrice30m, overnightPrice: pricing.overnightPrice, extraGuestPrice: pricing.extraGuestPrice },
     checkIn: new Date(stay.checkIn), checkOut: new Date(now), guests: stay.guests,
   })
+  return base * (1 - stay.discountPercent / 100)
 }
 
 export function RoomGrid({ rooms, products }: { rooms: Room[]; products: Product[] }) {
@@ -131,6 +134,7 @@ function FreeActions({ room, onDone }: { room: Room; onDone: () => void }) {
             </NativeSelect>
           </div>
         </div>
+        <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1"><Label htmlFor="guests">Hóspedes</Label><Input id="guests" name="guests" type="number" min="1" defaultValue="2" /></div>
           <div className="grid gap-1"><Label htmlFor="prepaidAmount">Antecipado (R$)</Label><Input id="prepaidAmount" name="prepaidAmount" type="number" step="0.01" defaultValue="0" /></div>
@@ -161,6 +165,13 @@ function OccupiedPanel({ room, products, onDone }: { room: Room; products: Produ
         ))}
         <AddConsumption stayId={stay.id} products={products} />
       </section>
+      {room.loyalty && (
+        <section className="rounded-lg border p-3 text-sm">
+          <div className="font-medium">Fidelidade — {room.loyalty.plate} · {room.loyalty.visits} visitas</div>
+          {room.loyalty.appliedDiscount > 0 && <p className="text-emerald-600">Desconto aplicado: {room.loyalty.appliedDiscount}%</p>}
+          {room.loyalty.appliedDiscount === 0 && room.loyalty.tiers.map((t) => <ApplyBenefit key={t.id} roomNumber={room.number} tier={t} />)}
+        </section>
+      )}
       <section className="rounded-lg border p-3 text-sm">
         <div className="mb-1 font-medium">Fechamento — {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · ⏱ {elapsedLabel(stay.checkIn, now)}</div>
         <Row label="Estadia (estimada)" value={estadia != null ? money(estadia) : '—'} />
@@ -205,6 +216,16 @@ function CheckOut({ roomNumber, onDone }: { roomNumber: string; onDone: () => vo
   const [state, formAction] = useActionState<ActionState, FormData>(async () => checkOutAction(roomNumber), { ok: false })
   useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
   return <form action={formAction}><Submit>Confirmar saída</Submit>{state.error && <p className="text-destructive text-sm">{state.error}</p>}</form>
+}
+
+function ApplyBenefit({ roomNumber, tier }: { roomNumber: string; tier: { id: number; discountPercent: number } }) {
+  const [state, action] = useActionState<ActionState, FormData>(async () => applyBenefitAction(roomNumber, tier.id), { ok: false })
+  return (
+    <form action={action} className="mt-1">
+      <Button size="sm" variant="secondary" type="submit">Aplicar {tier.discountPercent}%</Button>
+      {state.error && <span className="ml-2 text-destructive text-xs">{state.error}</span>}
+    </form>
+  )
 }
 
 function SimpleStatus({ number, status, label, onDone }: { number: string; status: 'free' | 'cleaning'; label: string; onDone: () => void }) {

@@ -5,6 +5,7 @@ import { can } from '@/lib/rbac'
 import { computeStayAmount } from '@/lib/billing'
 import type { CheckInInput } from '@/lib/validation/stay'
 import { getOpenShiftFor } from '@/server/data/shifts'
+import { customerByPlate } from '@/server/data/loyalty'
 
 async function requireOps() {
   const me = await getCurrentUser()
@@ -18,6 +19,7 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   if (room.status !== 'free') throw new Error('Room is not free')
   if (!room.categoryId) throw new Error('Room has no category')
   const openShiftId = (await getOpenShiftFor(new Date()))?.id ?? null
+  const customer = input.plate ? await customerByPlate(input.plate) : null
   return db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
       data: {
@@ -31,6 +33,7 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
         prepaidAmount: input.prepaidAmount,
         status: 'open',
         entryEmployeeId: me.id,
+        customerId: customer?.id ?? null,
       },
     })
     await tx.room.update({ where: { number: input.roomNumber }, data: { status: 'occupied', currentStayId: stay.id } })
