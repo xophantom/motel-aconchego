@@ -22,6 +22,7 @@ async function NavContent() {
         {isManager && <NavLink href="/tarifas">Tarifas</NavLink>}
         {isManager && <NavLink href="/produtos">Produtos</NavLink>}
         {isManager && <NavLink href="/relatorios">Relatórios</NavLink>}
+        {isManager && <NavLink href="/fidelidade">Fidelidade</NavLink>}
         {isManager && <NavLink href="/users">Funcionários</NavLink>}
         <div className="ml-auto flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{me.name} · {ROLE_LABEL[me.role]}</span>
