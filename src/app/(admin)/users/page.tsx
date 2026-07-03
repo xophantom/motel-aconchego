@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { listEmployees } from '@/server/data/employees'
-import { CreateUserForm } from './user-forms'
+import { CreateUserForm, EditUserDialog } from './user-forms'
 import {
   Table,
   TableHeader,
@@ -32,6 +32,7 @@ async function UsersList() {
                 <TableHead>Usuário</TableHead>
                 <TableHead>Papel</TableHead>
                 <TableHead>Ativo</TableHead>
+                <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -41,6 +42,11 @@ async function UsersList() {
                   <TableCell>{u.username}</TableCell>
                   <TableCell>{u.role}</TableCell>
                   <TableCell>{u.active ? 'Sim' : 'Não'}</TableCell>
+                  <TableCell>
+                    <EditUserDialog
+                      user={{ id: u.id, name: u.name, username: u.username, role: u.role, active: u.active }}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
