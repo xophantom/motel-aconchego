@@ -129,3 +129,25 @@ export async function cancelCheckIn(roomNumber: string, reason: string): Promise
   })
   await logEvent({ type: 'stay.cancel_checkin', description: `Cancelou entrada quarto ${roomNumber} · ${reason}`, entity: 'stay', entityId: String(stay.id), roomNumber })
 }
+
+export async function cancelCheckOut(roomNumber: string, reason: string): Promise<void> {
+  const me = await requireCancelWindow()
+  if (!reason.trim()) throw new Error('reason required')
+  const room = await db.room.findUniqueOrThrow({ where: { number: roomNumber } })
+  if (room.status !== 'free' && room.status !== 'cleaning') throw new Error('room reoccupied')
+  const stay = await db.stay.findFirst({ where: { roomNumber, status: 'closed', type: 'room' }, orderBy: { checkOut: 'desc' } })
+  if (!stay || !stay.checkOut) throw new Error('no closed stay')
+  const shiftId = (await getOpenShiftFor(new Date()))?.id ?? null
+  // the checkout balance movement(s): stay-type, at or after the checkout time (the prepaid was created at check-in, earlier)
+  const movs = await db.cashMovement.findMany({ where: { stayId: stay.id, type: 'stay', occurredAt: { gte: stay.checkOut } } })
+  await db.$transaction(async (tx) => {
+    for (const m of movs) {
+      await tx.cashMovement.create({
+        data: { type: 'stay', stayId: stay.id, amount: -Number(m.amount), employeeId: me.id, shiftId, occurredAt: new Date(), description: `estorno · cancelamento · ${reason}` },
+      })
+    }
+    await tx.stay.update({ where: { id: stay.id }, data: { status: 'open', checkOut: null, stayAmount: null, paymentEmployeeId: null } })
+    await tx.room.update({ where: { number: roomNumber }, data: { status: 'occupied', currentStayId: stay.id } })
+  })
+  await logEvent({ type: 'stay.cancel_checkout', description: `Cancelou saída quarto ${roomNumber} · ${reason}`, entity: 'stay', entityId: String(stay.id), roomNumber })
+}
