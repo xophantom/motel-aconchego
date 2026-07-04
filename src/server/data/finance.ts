@@ -191,3 +191,39 @@ export async function statementRange(from: Date, to: Date): Promise<StatementRan
   totals.expenses = round2(totals.expenses); totals.income = round2(totals.income); totals.net = round2(totals.net)
   return { days, totals }
 }
+
+export type CostCenterMonthRow = { code: string | null; description: string | null; income: number; expense: number; net: number }
+export type CostCenterMonthly = { year: number; month: number; rows: CostCenterMonthRow[]; totals: { income: number; expense: number; net: number } }
+
+export async function costCenterMonthly(year: number, month: number): Promise<CostCenterMonthly> {
+  await requireFinance()
+  month = Math.min(12, Math.max(1, Math.trunc(month)))
+  year = Math.min(2100, Math.max(2000, Math.trunc(year)))
+  const start = new Date(year, month - 1, 1)
+  const end = new Date(year, month, 1)
+  const entries = await db.ledgerEntry.findMany({
+    where: { entryDate: { gte: start, lt: end } },
+    select: { kind: true, amount: true, costCenter: true, center: { select: { description: true } } },
+  })
+  const map = new Map<string, CostCenterMonthRow>()
+  for (const e of entries) {
+    const key = e.costCenter ?? ' ' // sentinel for the no-center bucket
+    const row = map.get(key) ?? { code: e.costCenter ?? null, description: e.center?.description ?? null, income: 0, expense: 0, net: 0 }
+    if (e.kind === 'income') row.income += Number(e.amount)
+    else row.expense += Number(e.amount)
+    map.set(key, row)
+  }
+  const rows = [...map.values()]
+    .map((r) => ({ ...r, income: round2(r.income), expense: round2(r.expense), net: round2(r.income - r.expense) }))
+    .sort((a, b) => {
+      if (a.code === null) return 1
+      if (b.code === null) return -1
+      return a.code.localeCompare(b.code)
+    })
+  const totals = {
+    income: round2(rows.reduce((a, r) => a + r.income, 0)),
+    expense: round2(rows.reduce((a, r) => a + r.expense, 0)),
+    net: round2(rows.reduce((a, r) => a + r.net, 0)),
+  }
+  return { year, month, rows, totals }
+}
