@@ -6,6 +6,7 @@ import { computeStayAmount } from '@/lib/billing'
 import type { CheckInInput } from '@/lib/validation/stay'
 import { getOpenShiftFor } from '@/server/data/shifts'
 import { customerByPlate } from '@/server/data/loyalty'
+import { logEvent } from '@/server/audit'
 
 async function requireOps() {
   const me = await getCurrentUser()
@@ -20,7 +21,7 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   if (!room.categoryId) throw new Error('Room has no category')
   const openShiftId = (await getOpenShiftFor(new Date()))?.id ?? null
   const customer = input.plate ? await customerByPlate(input.plate) : null
-  return db.$transaction(async (tx) => {
+  const stay = await db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
       data: {
         type: 'room',
@@ -44,6 +45,14 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
     }
     return stay
   })
+  await logEvent({
+    type: 'stay.checkin',
+    description: `Entrada quarto ${input.roomNumber}${input.plate ? ` · placa ${input.plate}` : ''}`,
+    entity: 'stay',
+    entityId: String(stay.id),
+    roomNumber: input.roomNumber,
+  })
+  return stay
 }
 
 export async function checkOut(roomNumber: string) {
@@ -80,6 +89,13 @@ export async function checkOut(roomNumber: string) {
       data: { type: 'stay', stayId: stay.id, amount: balance, employeeId: me.id, shiftId: openShiftId, occurredAt: checkOutAt, description: `Saída quarto ${roomNumber}` },
     })
     await tx.room.update({ where: { number: roomNumber }, data: { status: 'cleaning', currentStayId: null } })
+  })
+  await logEvent({
+    type: 'stay.checkout',
+    description: `Saída quarto ${roomNumber} · R$ ${balance.toFixed(2)}`,
+    entity: 'stay',
+    entityId: String(stay.id),
+    roomNumber,
   })
   return { stayAmount, balance }
 }

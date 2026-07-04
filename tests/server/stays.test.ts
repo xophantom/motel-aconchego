@@ -8,6 +8,7 @@ import { checkIn, checkOut } from '@/server/data/stays'
 
 let categoryId: number
 beforeEach(async () => {
+  await db.eventLog.deleteMany()
   await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.stay.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany(); await db.employee.deleteMany()
@@ -73,5 +74,27 @@ describe('check-out', () => {
     await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000), discountPercent: 50 } })
     const { stayAmount } = await checkOut('01')
     expect(stayAmount).toBe(80) // 160 overnight * 50% off
+  })
+})
+
+describe('audit trail', () => {
+  it('check-in writes a stay.checkin event', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    const ev = await db.eventLog.findMany({ where: { type: 'stay.checkin' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entity).toBe('stay')
+    expect(ev[0].entityId).toBe(String(stay.id))
+    expect(ev[0].roomNumber).toBe('01')
+    expect(ev[0].employeeId).toBe(1)
+  })
+
+  it('check-out writes a stay.checkout event', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
+    await checkOut('01')
+    const ev = await db.eventLog.findMany({ where: { type: 'stay.checkout' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entityId).toBe(String(stay.id))
+    expect(ev[0].roomNumber).toBe('01')
   })
 })
