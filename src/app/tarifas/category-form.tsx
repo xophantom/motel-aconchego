@@ -31,7 +31,7 @@ export function CategoryForm({ categoryId, category }: { categoryId: number; cat
       <Num name="includedGuests" label="Pessoas inc." defaultValue={category.includedGuests} />
       <Save />
       {state.error && <span className="text-destructive text-xs">{state.error}</span>}
-      {state.ok && <span className="text-xs text-[var(--room-free)]">ok</span>}
+      {state.ok && <span className="text-xs text-[var(--room-free)]">✓ ok</span>}
     </form>
   )
 }

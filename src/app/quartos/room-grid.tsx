@@ -131,9 +131,21 @@ function RoomCard({ room, products }: { room: Room; products: Product[] }) {
   )
 }
 
-function Submit({ children }: { children: React.ReactNode }) {
+function Submit({ children, className }: { children: React.ReactNode; className?: string }) {
   const { pending } = useFormStatus()
-  return <Button disabled={pending}>{pending ? '…' : children}</Button>
+  return <Button disabled={pending} className={className}>{pending ? '…' : children}</Button>
+}
+
+function Section({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border bg-muted/20 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {right}
+      </div>
+      {children}
+    </section>
+  )
 }
 
 function FreeActions({ room, onDone }: { room: Room; onDone: () => void }) {
@@ -164,7 +176,7 @@ function FreeActions({ room, onDone }: { room: Room; onDone: () => void }) {
           <div className="grid gap-1"><Label htmlFor="guests">Hóspedes</Label><Input id="guests" name="guests" type="number" min="1" defaultValue="2" /></div>
           <div className="grid gap-1"><Label htmlFor="prepaidAmount">Antecipado (R$)</Label><Input id="prepaidAmount" name="prepaidAmount" type="number" step="0.01" defaultValue="0" /></div>
         </div>
-        <Submit>Fazer entrada</Submit>
+        <Submit className="w-full">Fazer entrada</Submit>
         {state.error && <p className="text-destructive text-sm">{state.error}</p>}
       </form>
       <MaintenanceForm number={room.number} onDone={onDone} />
@@ -179,39 +191,56 @@ function OccupiedPanel({ room, products, onDone }: { room: Room; products: Produ
   const estadia = room.pricing ? estimateStay(stay, room.pricing, now) : null
   const total = estadia != null ? estadia + consumoTotal - stay.prepaid : null
   return (
-    <div className="grid gap-4">
-      <section className="grid gap-2">
-        <h3 className="text-sm font-medium">Consumo ({money(consumoTotal)})</h3>
-        {room.consumption.map((c) => (
-          <div key={c.id} className="flex items-center justify-between text-sm">
-            <span>{c.qty}× {c.description} — {money(c.unitPrice * c.qty)}</span>
-            <RemoveItem id={c.id} />
-          </div>
-        ))}
+    <div className="grid gap-3">
+      <Section title="Consumo" right={<span className="tnum text-sm font-medium">{money(consumoTotal)}</span>}>
+        <div className="grid gap-1.5">
+          {room.consumption.length === 0 && <p className="text-xs text-muted-foreground">Nenhum item lançado.</p>}
+          {room.consumption.map((c) => (
+            <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+              <span className="flex items-center gap-2">
+                <span className="tnum rounded-md bg-secondary px-1.5 py-0.5 text-xs font-semibold">{c.qty}×</span>
+                {c.description}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="tnum text-muted-foreground">{money(c.unitPrice * c.qty)}</span>
+                <RemoveItem id={c.id} />
+              </span>
+            </div>
+          ))}
+        </div>
         <AddConsumption stayId={stay.id} products={products} />
-      </section>
+      </Section>
       {room.loyalty && (
-        <section className="rounded-lg border p-3 text-sm">
-          <div className="font-medium">Fidelidade — {room.loyalty.plate} · {room.loyalty.visits} visitas</div>
-          {room.loyalty.appliedDiscount > 0 && <p className="text-[var(--room-free)]">Desconto aplicado: {room.loyalty.appliedDiscount}%</p>}
-          {room.loyalty.appliedDiscount === 0 && room.loyalty.tiers.map((t) => <ApplyBenefit key={t.id} roomNumber={room.number} tier={t} />)}
-        </section>
+        <Section title={`Fidelidade · ${room.loyalty.plate}`} right={<span className="text-xs text-muted-foreground">{room.loyalty.visits} visitas</span>}>
+          {room.loyalty.appliedDiscount > 0 ? (
+            <p className="text-sm font-medium text-[var(--room-free)]">Desconto aplicado: {room.loyalty.appliedDiscount}%</p>
+          ) : room.loyalty.tiers.length ? (
+            <div className="flex flex-wrap gap-2">{room.loyalty.tiers.map((t) => <ApplyBenefit key={t.id} roomNumber={room.number} tier={t} />)}</div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Sem benefício disponível ainda.</p>
+          )}
+        </Section>
       )}
-      <section className="rounded-lg border p-3 text-sm">
-        <div className="mb-1 font-medium">Fechamento — {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · ⏱ {elapsedLabel(stay.checkIn, now)}</div>
+      <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Fechamento · {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · ⏱ {elapsedLabel(stay.checkIn, now)}
+        </div>
         <Row label="Estadia (estimada)" value={estadia != null ? money(estadia) : '—'} />
         <Row label="Consumo" value={money(consumoTotal)} />
-        <Row label="Antecipado" value={`- ${money(stay.prepaid)}`} />
-        <div className="mt-1 flex justify-between border-t pt-1 font-semibold"><span>Total</span><span>{total != null ? money(total) : '—'}</span></div>
+        <Row label="Antecipado" value={`− ${money(stay.prepaid)}`} />
+        <div className="mt-2 flex items-baseline justify-between border-t pt-2">
+          <span className="text-sm font-semibold">Total a receber</span>
+          <span className="tnum font-display text-2xl font-bold text-primary">{total != null ? money(total) : '—'}</span>
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">Valor final confirmado no servidor.</p>
-      </section>
+      </div>
       <CheckOut roomNumber={room.number} onDone={onDone} />
     </div>
   )
 }
 
 function Row({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>
+  return <div className="flex justify-between text-sm"><span className="text-muted-foreground">{label}</span><span className="tnum">{value}</span></div>
 }
 
 function AddConsumption({ stayId, products }: { stayId: string; products: Product[] }) {
@@ -234,13 +263,13 @@ function AddConsumption({ stayId, products }: { stayId: string; products: Produc
 
 function RemoveItem({ id }: { id: string }) {
   const [, action] = useActionState<ActionState, FormData>(async () => removeConsumptionAction(id), { ok: false })
-  return <form action={action}><Button size="sm" variant="ghost" type="submit">remover</Button></form>
+  return <form action={action}><Button size="icon" variant="ghost" type="submit" className="size-6 text-muted-foreground hover:text-destructive" aria-label="Remover item">×</Button></form>
 }
 
 function CheckOut({ roomNumber, onDone }: { roomNumber: string; onDone: () => void }) {
   const [state, formAction] = useActionState<ActionState, FormData>(async () => checkOutAction(roomNumber), { ok: false })
   useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
-  return <form action={formAction}><Submit>Confirmar saída</Submit>{state.error && <p className="text-destructive text-sm">{state.error}</p>}</form>
+  return <form action={formAction}><Submit className="w-full">Confirmar saída</Submit>{state.error && <p className="mt-1 text-destructive text-sm">{state.error}</p>}</form>
 }
 
 function ApplyBenefit({ roomNumber, tier }: { roomNumber: string; tier: { id: number; discountPercent: number } }) {
@@ -287,15 +316,37 @@ function VendaAvulsa({ products }: { products: Product[] }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button variant="outline">Venda avulsa</Button></DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Venda avulsa (Pedido Casa)</DialogTitle></DialogHeader>
-        <AddToCart products={products} onAdd={(productCode, qty) => setCart((c) => [...c, { productCode, qty }])} />
-        <ul className="text-sm">{cart.map((i, idx) => <li key={idx}>{i.qty}× {products.find((p) => p.code === i.productCode)?.description}</li>)}</ul>
-        <p className="text-sm font-medium">Total: {money(total)}</p>
-        <form action={action}>
-          <input type="hidden" name="items" value={JSON.stringify(cart)} />
-          <Submit>Registrar venda</Submit>
-          {state.error && <p className="text-destructive text-sm">{state.error}</p>}
-        </form>
+        <DialogHeader><DialogTitle className="font-display">Venda avulsa (Pedido Casa)</DialogTitle></DialogHeader>
+        <div className="grid gap-3">
+          <AddToCart products={products} onAdd={(productCode, qty) => setCart((c) => [...c, { productCode, qty }])} />
+          <ul className="grid gap-1.5 text-sm">
+            {cart.length === 0 && <li className="text-xs text-muted-foreground">Carrinho vazio. Adicione itens acima.</li>}
+            {cart.map((i, idx) => {
+              const p = products.find((pp) => pp.code === i.productCode)
+              return (
+                <li key={idx} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <span className="tnum rounded-md bg-secondary px-1.5 py-0.5 text-xs font-semibold">{i.qty}×</span>
+                    {p?.description}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="tnum text-muted-foreground">{money((p?.price ?? 0) * i.qty)}</span>
+                    <Button type="button" size="icon" variant="ghost" className="size-6 text-muted-foreground hover:text-destructive" aria-label="Remover" onClick={() => setCart((c) => c.filter((_, x) => x !== idx))}>×</Button>
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="flex items-baseline justify-between border-t pt-2">
+            <span className="text-sm font-semibold">Total</span>
+            <span className="tnum font-display text-xl font-bold">{money(total)}</span>
+          </div>
+          <form action={action}>
+            <input type="hidden" name="items" value={JSON.stringify(cart)} />
+            <Submit className="w-full">Registrar venda</Submit>
+            {state.error && <p className="mt-1 text-destructive text-sm">{state.error}</p>}
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   )
