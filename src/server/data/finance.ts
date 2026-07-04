@@ -97,3 +97,97 @@ export async function deleteEntry(id: bigint) {
   await db.ledgerEntry.delete({ where: { id } })
   await logEvent({ type: 'finance.entry.delete', description: `Lançamento #${id} removido`, entity: 'ledgerEntry', entityId: String(id) })
 }
+
+export type DailyStatement = {
+  date: string
+  stays: number
+  consumption: number
+  cashIn: number
+  cashOut: number
+  expenses: number
+  income: number
+  net: number
+}
+
+function civilDayBounds(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
+  return { start, end }
+}
+
+function isoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export async function dailyStatement(date: Date): Promise<DailyStatement> {
+  await requireFinance()
+  const { start, end } = civilDayBounds(date)
+
+  const roomStays = await db.stay.findMany({
+    where: { type: 'room', status: 'closed', checkOut: { gte: start, lt: end } },
+    select: { stayAmount: true, consumptionAmount: true },
+  })
+  const walkins = await db.stay.findMany({
+    where: { type: 'walkin', status: 'closed', checkOut: { gte: start, lt: end } },
+    select: { consumptionAmount: true },
+  })
+  const stays = roomStays.reduce((a, s) => a + Number(s.stayAmount ?? 0), 0)
+  const consumption =
+    roomStays.reduce((a, s) => a + Number(s.consumptionAmount ?? 0), 0) +
+    walkins.reduce((a, s) => a + Number(s.consumptionAmount ?? 0), 0)
+
+  const movs = await db.cashMovement.findMany({
+    where: { occurredAt: { gte: start, lt: end } },
+    select: { amount: true },
+  })
+  let cashIn = 0
+  let cashOut = 0
+  for (const m of movs) {
+    const v = Number(m.amount)
+    if (v >= 0) cashIn += v
+    else cashOut += -v
+  }
+
+  const entries = await db.ledgerEntry.findMany({
+    where: { entryDate: { gte: start, lt: end } },
+    select: { kind: true, amount: true },
+  })
+  let expenses = 0
+  let income = 0
+  for (const e of entries) {
+    if (e.kind === 'income') income += Number(e.amount)
+    else expenses += Number(e.amount)
+  }
+
+  const net = cashIn - cashOut + income - expenses
+  return {
+    date: isoDate(date),
+    stays: round2(stays), consumption: round2(consumption),
+    cashIn: round2(cashIn), cashOut: round2(cashOut),
+    expenses: round2(expenses), income: round2(income), net: round2(net),
+  }
+}
+
+export type StatementRange = { days: DailyStatement[]; totals: DailyStatement }
+
+export async function statementRange(from: Date, to: Date): Promise<StatementRange> {
+  await requireFinance()
+  const days: DailyStatement[] = []
+  const cursor = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+  const last = new Date(to.getFullYear(), to.getMonth(), to.getDate())
+  // guard against an inverted or absurd range (cap at 366 iterations)
+  for (let i = 0; cursor <= last && i < 366; i++) {
+    days.push(await dailyStatement(new Date(cursor)))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  const totals = days.reduce<DailyStatement>((t, d) => ({
+    date: '',
+    stays: t.stays + d.stays, consumption: t.consumption + d.consumption,
+    cashIn: t.cashIn + d.cashIn, cashOut: t.cashOut + d.cashOut,
+    expenses: t.expenses + d.expenses, income: t.income + d.income, net: t.net + d.net,
+  }), { date: '', stays: 0, consumption: 0, cashIn: 0, cashOut: 0, expenses: 0, income: 0, net: 0 })
+  totals.stays = round2(totals.stays); totals.consumption = round2(totals.consumption)
+  totals.cashIn = round2(totals.cashIn); totals.cashOut = round2(totals.cashOut)
+  totals.expenses = round2(totals.expenses); totals.income = round2(totals.income); totals.net = round2(totals.net)
+  return { days, totals }
+}
