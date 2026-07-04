@@ -151,3 +151,10 @@ export async function cancelCheckOut(roomNumber: string, reason: string): Promis
   })
   await logEvent({ type: 'stay.cancel_checkout', description: `Cancelou saída quarto ${roomNumber} · ${reason}`, entity: 'stay', entityId: String(stay.id), roomNumber })
 }
+
+export async function canCancelNow(): Promise<boolean> {
+  const me = await getCurrentUser()
+  if (!me || !can(me.role, 'stay:cancel')) return false
+  if (me.role === 'manager') return true
+  return !!(await getOpenShiftFor(new Date()))
+}
