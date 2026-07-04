@@ -3,6 +3,7 @@ import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { hashPassword } from '@/server/password'
+import { logEvent } from '@/server/audit'
 import type { CreateEmployeeInput, UpdateEmployeeInput } from '@/lib/validation/employee'
 
 async function requireManager() {
@@ -22,31 +23,39 @@ export async function listEmployees() {
 export async function createEmployee(input: CreateEmployeeInput) {
   await requireManager()
   const passwordHash = await hashPassword(input.password)
-  return db.employee.create({
+  const created = await db.employee.create({
     data: { name: input.name, username: input.username, role: input.role, passwordHash },
     select: { id: true, name: true, username: true, role: true, active: true },
   })
+  await logEvent({ type: 'user.create', description: `Funcionário ${created.name} (${created.role}) criado`, entity: 'employee', entityId: String(created.id) })
+  return created
 }
 
 export async function updateEmployee(id: number, input: UpdateEmployeeInput) {
   await requireManager()
   await assertNotLastManager(id, { nextRole: input.role, nextActive: input.active })
-  return db.employee.update({
+  const updated = await db.employee.update({
     where: { id },
     data: { role: input.role, active: input.active },
     select: { id: true, name: true, username: true, role: true, active: true },
   })
+  await logEvent({ type: 'user.update', description: `Funcionário ${updated.name} atualizado (${updated.role}, ${updated.active ? 'ativo' : 'inativo'})`, entity: 'employee', entityId: String(id) })
+  return updated
 }
 
 export async function deactivateEmployee(id: number) {
   await requireManager()
   await assertNotLastManager(id, { nextActive: false })
-  return db.employee.update({ where: { id }, data: { active: false } })
+  const deactivated = await db.employee.update({ where: { id }, data: { active: false } })
+  await logEvent({ type: 'user.deactivate', description: `Funcionário ${deactivated.name} desativado`, entity: 'employee', entityId: String(id) })
+  return deactivated
 }
 
 export async function resetPassword(id: number, password: string) {
   await requireManager()
-  return db.employee.update({ where: { id }, data: { passwordHash: await hashPassword(password) } })
+  const reset = await db.employee.update({ where: { id }, data: { passwordHash: await hashPassword(password) } })
+  await logEvent({ type: 'user.reset', description: `Senha redefinida para ${reset.name}`, entity: 'employee', entityId: String(id) })
+  return reset
 }
 
 export function countActiveManagers() {

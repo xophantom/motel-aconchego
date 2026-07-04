@@ -7,6 +7,7 @@ import { db } from '@/server/db'
 import { openShift, closeShift, addCashMovement, currentShiftSummary, getOpenShiftFor } from '@/server/data/shifts'
 
 beforeEach(async () => {
+  await db.eventLog.deleteMany()
   await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.stay.deleteMany(); await db.shift.deleteMany(); await db.employee.deleteMany()
   await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
@@ -69,5 +70,30 @@ describe('shifts DAL', () => {
     await closeShift(s.id, { closingBalance: 50 })
     expect((await getOpenShiftFor(new Date()))).toBeNull()
     await expect(openShift({ openingBalance: 0 })).rejects.toThrow(/já fechado/i)
+  })
+})
+
+describe('audit trail', () => {
+  it('openShift writes shift.open', async () => {
+    const shift = await openShift({ openingBalance: 100 })
+    const ev = await db.eventLog.findMany({ where: { type: 'shift.open' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entityId).toBe(String(shift.id))
+  })
+
+  it('addCashMovement writes cash.<type>', async () => {
+    await openShift({ openingBalance: 100 })
+    await addCashMovement({ type: 'withdrawal', amount: 20, description: 'Troco' })
+    const ev = await db.eventLog.findMany({ where: { type: 'cash.withdrawal' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entity).toBe('cash')
+  })
+
+  it('closeShift writes shift.close', async () => {
+    const shift = await openShift({ openingBalance: 100 })
+    await closeShift(shift.id, { closingBalance: 100 })
+    const ev = await db.eventLog.findMany({ where: { type: 'shift.close' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entityId).toBe(String(shift.id))
   })
 })

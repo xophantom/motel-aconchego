@@ -9,6 +9,7 @@ import { openShift, currentShiftSummary } from '@/server/data/shifts'
 
 let stayId: bigint
 beforeEach(async () => {
+  await db.eventLog.deleteMany()
   await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.consumption.deleteMany(); await db.stay.deleteMany()
   await db.shift.deleteMany(); await db.product.deleteMany(); await db.room.deleteMany()
@@ -60,6 +61,30 @@ describe('walk-in sale', () => {
   })
   it('rejects an unknown product code', async () => {
     await expect(walkinSale({ items: [{ productCode: 'ZZZ', qty: 1 }] })).rejects.toThrow(/inválido/i)
+  })
+})
+
+describe('audit trail', () => {
+  it('addConsumption writes consumption.add', async () => {
+    await addConsumption({ stayId, productCode: 'CLA', qty: 2 })
+    const ev = await db.eventLog.findMany({ where: { type: 'consumption.add' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entityId).toBe(String(stayId))
+  })
+
+  it('removeConsumption writes consumption.remove', async () => {
+    const item = await addConsumption({ stayId, productCode: 'CLA', qty: 1 })
+    await removeConsumption(item.id)
+    const ev = await db.eventLog.findMany({ where: { type: 'consumption.remove' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entityId).toBe(String(stayId))
+  })
+
+  it('walkinSale writes consumption.walkin', async () => {
+    const { stay } = await walkinSale({ items: [{ productCode: 'CLA', qty: 1 }] })
+    const ev = await db.eventLog.findMany({ where: { type: 'consumption.walkin' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entityId).toBe(String(stay.id))
   })
 })
 

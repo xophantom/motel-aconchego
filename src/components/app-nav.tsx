@@ -24,6 +24,7 @@ async function NavContent() {
           { href: '/relatorios', label: 'Relatórios' },
           { href: '/fidelidade', label: 'Fidelidade' },
           { href: '/users', label: 'Funcionários' },
+          { href: '/auditoria', label: 'Auditoria' },
         ]
       : []),
   ]

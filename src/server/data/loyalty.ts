@@ -2,6 +2,7 @@ import 'server-only'
 import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
+import { logEvent } from '@/server/audit'
 
 async function requireLoyaltyManager() {
   const me = await getCurrentUser()
@@ -20,11 +21,15 @@ export async function listTiers() {
 }
 export async function upsertTier(input: { minVisits: number; discountPercent: number }) {
   await requireLoyaltyManager()
-  return db.loyaltyTier.upsert({ where: { minVisits: input.minVisits }, create: input, update: { discountPercent: input.discountPercent } })
+  const tier = await db.loyaltyTier.upsert({ where: { minVisits: input.minVisits }, create: input, update: { discountPercent: input.discountPercent } })
+  await logEvent({ type: 'loyalty.tier.upsert', description: `Faixa fidelidade ${tier.minVisits} visitas · ${tier.discountPercent}%`, entity: 'loyaltyTier', entityId: String(tier.id) })
+  return tier
 }
 export async function deleteTier(id: number) {
   await requireLoyaltyManager()
-  return db.loyaltyTier.delete({ where: { id } })
+  const tier = await db.loyaltyTier.delete({ where: { id } })
+  await logEvent({ type: 'loyalty.tier.delete', description: `Faixa fidelidade ${tier.minVisits} visitas removida`, entity: 'loyaltyTier', entityId: String(id) })
+  return tier
 }
 export async function customerByPlate(plate: string) {
   await requireOps()

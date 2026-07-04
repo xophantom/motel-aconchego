@@ -2,6 +2,7 @@ import 'server-only'
 import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
+import { logEvent } from '@/server/audit'
 import type { UpdateCategoryInput, UpdateRateInput } from '@/lib/validation/tariff'
 
 async function requireTariffManager() {
@@ -17,13 +18,17 @@ export async function listCategoriesWithRates() {
 
 export async function updateCategory(id: number, input: UpdateCategoryInput) {
   await requireTariffManager()
-  return db.roomCategory.update({ where: { id }, data: input })
+  const cat = await db.roomCategory.update({ where: { id }, data: input })
+  await logEvent({ type: 'tariff.update', description: `Categoria ${cat.code} atualizada`, entity: 'category', entityId: String(id) })
+  return cat
 }
 
 export async function updateRate(categoryId: number, input: UpdateRateInput) {
   await requireTariffManager()
   const { day, ...prices } = input
-  return db.rate.update({ where: { categoryId_day: { categoryId, day } }, data: prices })
+  const rate = await db.rate.update({ where: { categoryId_day: { categoryId, day } }, data: prices })
+  await logEvent({ type: 'tariff.update', description: `Tarifa categoria #${categoryId} (${day}) atualizada`, entity: 'rate', entityId: `${categoryId}:${day}` })
+  return rate
 }
 
 export async function listCategoriesForBoard() {
