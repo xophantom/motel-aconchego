@@ -14,6 +14,16 @@ async function requireOps() {
   return me
 }
 
+async function requireCancelWindow() {
+  const me = await getCurrentUser()
+  if (!me || !can(me.role, 'stay:cancel')) throw new Error('Forbidden')
+  if (me.role !== 'manager') {
+    const open = await getOpenShiftFor(new Date())
+    if (!open) throw new Error('shift closed')
+  }
+  return me
+}
+
 export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { chargeMode?: 'period' | 'overnight' }) {
   const me = await requireOps()
   const room = await db.room.findUniqueOrThrow({ where: { number: input.roomNumber } })
@@ -98,4 +108,24 @@ export async function checkOut(roomNumber: string) {
     roomNumber,
   })
   return { stayAmount, balance }
+}
+
+export async function cancelCheckIn(roomNumber: string, reason: string): Promise<void> {
+  const me = await requireCancelWindow()
+  if (!reason.trim()) throw new Error('reason required')
+  const room = await db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true } })
+  if (room.status !== 'occupied' || !room.currentStay || room.currentStay.status !== 'open') throw new Error('not occupied')
+  const stay = room.currentStay
+  const shiftId = (await getOpenShiftFor(new Date()))?.id ?? null
+  const movs = await db.cashMovement.findMany({ where: { stayId: stay.id, type: 'stay' } })
+  await db.$transaction(async (tx) => {
+    for (const m of movs) {
+      await tx.cashMovement.create({
+        data: { type: 'stay', stayId: stay.id, amount: -Number(m.amount), employeeId: me.id, shiftId, occurredAt: new Date(), description: `estorno · cancelamento · ${reason}` },
+      })
+    }
+    await tx.stay.update({ where: { id: stay.id }, data: { status: 'canceled', canceledAt: new Date(), canceledReason: reason, canceledById: me.id } })
+    await tx.room.update({ where: { number: roomNumber }, data: { status: 'free', currentStayId: null } })
+  })
+  await logEvent({ type: 'stay.cancel_checkin', description: `Cancelou entrada quarto ${roomNumber} · ${reason}`, entity: 'stay', entityId: String(stay.id), roomNumber })
 }
