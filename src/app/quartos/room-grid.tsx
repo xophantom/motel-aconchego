@@ -28,8 +28,8 @@ type Room = {
 }
 
 const STATUS_LABEL: Record<Room['status'], string> = { free: 'Livre', occupied: 'Ocupado', cleaning: 'Limpeza', maintenance: 'Manutenção' }
-const STATUS_BG: Record<Room['status'], string> = {
-  free: 'bg-emerald-600 text-white', occupied: 'bg-red-600 text-white', cleaning: 'bg-amber-500 text-black', maintenance: 'bg-stone-500 text-white',
+const STATUS_TILE: Record<Room['status'], string> = {
+  free: 'var(--room-free)', occupied: 'var(--room-occupied)', cleaning: 'var(--room-cleaning)', maintenance: 'var(--room-maintenance)',
 }
 const money = (n: number) => `R$ ${n.toFixed(2)}`
 function useNow(active: boolean) {
@@ -53,10 +53,27 @@ function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
 export function RoomGrid({ rooms, products }: { rooms: Room[]; products: Product[] }) {
   return (
     <div className="grid gap-4">
-      <div className="flex justify-end"><VendaAvulsa products={products} /></div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Legend />
+        <VendaAvulsa products={products} />
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} />)}
       </div>
+    </div>
+  )
+}
+
+function Legend() {
+  const items: [Room['status'], string][] = [['free', 'Livre'], ['occupied', 'Ocupado'], ['cleaning', 'Limpeza'], ['maintenance', 'Manutenção']]
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+      {items.map(([s, label]) => (
+        <span key={s} className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full" style={{ background: STATUS_TILE[s], boxShadow: `0 0 8px ${STATUS_TILE[s]}` }} />
+          {label}
+        </span>
+      ))}
     </div>
   )
 }
@@ -70,23 +87,31 @@ function RoomCard({ room, products }: { room: Room; products: Product[] }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className={`group rounded-xl p-3 text-left shadow-sm ring-1 ring-black/10 transition hover:-translate-y-0.5 hover:shadow-md ${STATUS_BG[room.status]}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold leading-none">{room.number}</span>
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">{STATUS_LABEL[room.status]}</span>
+        <button
+          style={{ '--tile': STATUS_TILE[room.status] } as React.CSSProperties}
+          className="group relative overflow-hidden rounded-2xl border bg-card p-3.5 text-left transition duration-200 border-[color-mix(in_oklab,var(--tile)_28%,var(--border))] hover:-translate-y-1 hover:border-[color-mix(in_oklab,var(--tile)_55%,transparent)] hover:shadow-[0_12px_36px_-16px_var(--tile)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tile)]"
+        >
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-[var(--tile)] opacity-80" aria-hidden />
+          <div className="flex items-start justify-between gap-2">
+            <span className="tnum font-display text-3xl font-extrabold leading-none tracking-tight text-[var(--tile)] [text-shadow:0_0_22px_color-mix(in_oklab,var(--tile)_45%,transparent)]">{room.number}</span>
+            <span className="flex items-center gap-1 rounded-full bg-[color-mix(in_oklab,var(--tile)_16%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--tile)]">
+              <span className={`size-1.5 rounded-full bg-[var(--tile)] ${occupied ? 'animate-pulse' : ''}`} aria-hidden />
+              {STATUS_LABEL[room.status]}
+            </span>
           </div>
-          <div className="mt-1 truncate text-xs opacity-90">{room.category?.description ?? '—'}</div>
+          <div className="mt-1.5 truncate text-xs text-muted-foreground">{room.category?.description ?? '—'}</div>
           {occupied && room.currentStay && (
-            <div className="mt-2 border-t border-white/25 pt-1.5 text-[11px] opacity-95">
-              ⏱ {elapsedLabel(room.currentStay.checkIn, now)} · 👤 {room.currentStay.guests}
-              {total != null && <> · <span className="font-semibold">{money(total)}</span></>}
+            <div className="tnum mt-2.5 flex items-center gap-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+              <span>⏱ {elapsedLabel(room.currentStay.checkIn, now)}</span>
+              <span>👤 {room.currentStay.guests}</span>
+              {total != null && <span className="ml-auto font-semibold text-foreground">{money(total)}</span>}
             </div>
           )}
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 font-display">
             Quarto {room.number}
             {room.category && <span className="text-sm font-normal text-muted-foreground">· {room.category.description}</span>}
             <Badge variant="secondary" className="ml-auto">{STATUS_LABEL[room.status]}</Badge>
@@ -168,7 +193,7 @@ function OccupiedPanel({ room, products, onDone }: { room: Room; products: Produ
       {room.loyalty && (
         <section className="rounded-lg border p-3 text-sm">
           <div className="font-medium">Fidelidade — {room.loyalty.plate} · {room.loyalty.visits} visitas</div>
-          {room.loyalty.appliedDiscount > 0 && <p className="text-emerald-600">Desconto aplicado: {room.loyalty.appliedDiscount}%</p>}
+          {room.loyalty.appliedDiscount > 0 && <p className="text-[var(--room-free)]">Desconto aplicado: {room.loyalty.appliedDiscount}%</p>}
           {room.loyalty.appliedDiscount === 0 && room.loyalty.tiers.map((t) => <ApplyBenefit key={t.id} roomNumber={room.number} tier={t} />)}
         </section>
       )}

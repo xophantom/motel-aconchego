@@ -55,8 +55,11 @@ async function Board() {
 
 export default function QuartosPage() {
   return (
-    <main className="mx-auto mt-8 max-w-6xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Quartos</h1>
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">Painel de quartos</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Toque num quarto para entrada, consumo ou saída.</p>
+      </div>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <Board />
       </Suspense>
