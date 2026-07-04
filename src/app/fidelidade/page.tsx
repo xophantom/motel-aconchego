@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { PageHeader } from '@/components/page-header'
 import { TierForm, DeleteTier } from './tier-form'
 
 async function Loyalty() {
@@ -23,8 +24,13 @@ async function Loyalty() {
             <TableHeader><TableRow><TableHead>Visitas</TableHead><TableHead>Desconto</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody>
               {tiers.map((t) => (
-                <TableRow key={t.id}><TableCell>{t.minVisits}</TableCell><TableCell>{t.discountPercent}%</TableCell><TableCell><DeleteTier id={t.id} /></TableCell></TableRow>
+                <TableRow key={t.id}>
+                  <TableCell className="tnum">{t.minVisits}</TableCell>
+                  <TableCell className="tnum font-semibold text-primary">{t.discountPercent}%</TableCell>
+                  <TableCell className="text-right"><DeleteTier id={t.id} /></TableCell>
+                </TableRow>
               ))}
+              {!tiers.length && <TableRow><TableCell colSpan={3} className="text-center text-sm text-muted-foreground">Nenhuma faixa ainda. Crie a primeira acima.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -35,8 +41,8 @@ async function Loyalty() {
 
 export default function FidelidadePage() {
   return (
-    <main className="mx-auto mt-8 max-w-3xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Fidelidade</h1>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <PageHeader title="Fidelidade" subtitle="Faixas por número de visitas do cliente → desconto na estadia." />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}><Loyalty /></Suspense>
     </main>
   )

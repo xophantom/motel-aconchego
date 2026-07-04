@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PageHeader } from '@/components/page-header'
 
 const money = (n: number) => `R$ ${n.toFixed(2)}`
 
@@ -22,7 +23,7 @@ async function Report({ searchParams }: { searchParams: Promise<{ year?: string;
   return (
     <div className="grid gap-6">
       <Card>
-        <CardHeader><CardTitle>Ocupação {String(month).padStart(2, '0')}/{year}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display">Ocupação {String(month).padStart(2, '0')}/{year}</CardTitle></CardHeader>
         <CardContent className="grid gap-4">
           <form method="GET" className="flex items-end gap-2">
             <div className="grid gap-1"><Label htmlFor="month">Mês</Label><Input id="month" name="month" type="number" min="1" max="12" defaultValue={month} className="w-20" /></div>
@@ -36,15 +37,15 @@ async function Report({ searchParams }: { searchParams: Promise<{ year?: string;
             <TableBody>
               {rep.rows.map((r) => (
                 <TableRow key={r.roomNumber}>
-                  <TableCell>{r.roomNumber}</TableCell><TableCell>{r.categoryCode ?? '—'}</TableCell>
-                  <TableCell>{r.rentals}</TableCell><TableCell>{money(r.totalStay)}</TableCell>
-                  <TableCell>{money(r.avgTicket)}</TableCell><TableCell>{money(r.totalConsumption)}</TableCell>
+                  <TableCell className="tnum font-medium">{r.roomNumber}</TableCell><TableCell>{r.categoryCode ?? '—'}</TableCell>
+                  <TableCell className="tnum">{r.rentals}</TableCell><TableCell className="tnum">{money(r.totalStay)}</TableCell>
+                  <TableCell className="tnum">{money(r.avgTicket)}</TableCell><TableCell className="tnum">{money(r.totalConsumption)}</TableCell>
                 </TableRow>
               ))}
-              <TableRow className="font-semibold">
-                <TableCell>TOTAL</TableCell><TableCell></TableCell><TableCell>{rep.totals.rentals}</TableCell>
-                <TableCell>{money(rep.totals.totalStay)}</TableCell><TableCell>{money(rep.totals.avgTicket)}</TableCell>
-                <TableCell>{money(rep.totals.totalConsumption)}</TableCell>
+              <TableRow className="border-t-2 border-primary/40 font-semibold">
+                <TableCell className="font-display">TOTAL</TableCell><TableCell></TableCell><TableCell className="tnum">{rep.totals.rentals}</TableCell>
+                <TableCell className="tnum">{money(rep.totals.totalStay)}</TableCell><TableCell className="tnum">{money(rep.totals.avgTicket)}</TableCell>
+                <TableCell className="tnum">{money(rep.totals.totalConsumption)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -56,8 +57,8 @@ async function Report({ searchParams }: { searchParams: Promise<{ year?: string;
 
 export default function RelatoriosPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string }> }) {
   return (
-    <main className="mx-auto mt-8 max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Relatórios</h1>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
+      <PageHeader title="Relatórios" subtitle="Ocupação mensal por apartamento. Baixe em CSV ou PDF." />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <Report searchParams={searchParams} />
       </Suspense>

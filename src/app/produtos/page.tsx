@@ -6,7 +6,11 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/page-header'
 import { ProductForm } from './product-form'
+
+const CAT_LABEL: Record<string, string> = { minibar: 'Frigobar', erotic: 'Erótico', kitchen: 'Cozinha', other: 'Outro' }
 
 async function Products() {
   await connection()
@@ -26,9 +30,14 @@ async function Products() {
                 const low = p.trackStock && p.stockQty <= p.minStock
                 return (
                   <TableRow key={p.code} className={low ? 'bg-destructive/10' : undefined}>
-                    <TableCell>{p.code}</TableCell><TableCell>{p.description}</TableCell><TableCell>{p.category}</TableCell>
-                    <TableCell>R$ {Number(p.price).toFixed(2)}</TableCell>
-                    <TableCell>{p.trackStock ? p.stockQty : '—'}{low ? ' ⚠️' : ''}</TableCell><TableCell>{p.minStock}</TableCell>
+                    <TableCell className="tnum font-medium">{p.code}</TableCell><TableCell>{p.description}</TableCell>
+                    <TableCell><Badge variant="secondary" className="font-normal">{CAT_LABEL[p.category] ?? p.category}</Badge></TableCell>
+                    <TableCell className="tnum">R$ {Number(p.price).toFixed(2)}</TableCell>
+                    <TableCell className="tnum">
+                      {p.trackStock ? p.stockQty : '—'}
+                      {low && <Badge variant="destructive" className="ml-2">baixo</Badge>}
+                    </TableCell>
+                    <TableCell className="tnum text-muted-foreground">{p.minStock}</TableCell>
                   </TableRow>
                 )
               })}
@@ -42,8 +51,8 @@ async function Products() {
 
 export default function ProdutosPage() {
   return (
-    <main className="mx-auto mt-8 max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Produtos</h1>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
+      <PageHeader title="Produtos" subtitle="Cadastro, preço e estoque do frigobar e da loja." />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <Products />
       </Suspense>

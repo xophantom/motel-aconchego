@@ -11,7 +11,11 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/page-header'
+
+const ROLE_LABEL: Record<string, string> = { manager: 'Gerente', reception: 'Recepção', housekeeper: 'Camareira' }
 
 async function UsersList() {
   await connection()
@@ -37,11 +41,15 @@ async function UsersList() {
             </TableHeader>
             <TableBody>
               {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell>{u.name}</TableCell>
-                  <TableCell>{u.username}</TableCell>
-                  <TableCell>{u.role}</TableCell>
-                  <TableCell>{u.active ? 'Sim' : 'Não'}</TableCell>
+                <TableRow key={u.id} className={u.active ? undefined : 'opacity-55'}>
+                  <TableCell className="font-medium">{u.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{u.username}</TableCell>
+                  <TableCell>{ROLE_LABEL[u.role] ?? u.role}</TableCell>
+                  <TableCell>
+                    {u.active
+                      ? <Badge variant="secondary" className="border-transparent bg-[color-mix(in_oklab,var(--room-free)_18%,transparent)] text-[var(--room-free)]">Ativo</Badge>
+                      : <Badge variant="outline" className="text-muted-foreground">Inativo</Badge>}
+                  </TableCell>
                   <TableCell>
                     <EditUserDialog
                       user={{ id: u.id, name: u.name, username: u.username, role: u.role, active: u.active }}
@@ -60,8 +68,8 @@ async function UsersList() {
 
 export default async function UsersPage() {
   return (
-    <main className="mx-auto mt-10 max-w-2xl p-6">
-      <h1 className="mb-6 text-xl font-semibold">Funcionários</h1>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <PageHeader title="Funcionários" subtitle="Contas de acesso e papéis da equipe." />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <UsersList />
       </Suspense>

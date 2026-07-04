@@ -61,7 +61,7 @@ export function CreateUserForm() {
             </Alert>
           )}
           {state.ok && (
-            <p className="text-sm text-green-600 dark:text-green-400">Funcionário criado com sucesso.</p>
+            <p className="text-sm text-[var(--room-free)]">Funcionário criado com sucesso.</p>
           )}
         </form>
       </CardContent>
@@ -165,7 +165,7 @@ export function EditUserDialog({ user }: { user: EditableUser }) {
               </Alert>
             )}
             {resetState.ok && (
-              <p className="text-sm text-green-600 dark:text-green-400">Senha alterada com sucesso.</p>
+              <p className="text-sm text-[var(--room-free)]">Senha alterada com sucesso.</p>
             )}
           </form>
         </div>

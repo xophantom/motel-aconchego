@@ -5,10 +5,12 @@ import { currentShiftSummary, listClosedShifts } from '@/server/data/shifts'
 import { getCurrentUser } from '@/server/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { PageHeader } from '@/components/page-header'
 import { OpenShiftForm, CloseShiftForm, MovementForm } from './caixa-forms'
 
 const money = (n: number) => `R$ ${n.toFixed(2)}`
 const periodLabel = (p: string) => (p === 'day_07_19' ? 'Diurno (07–19)' : 'Noturno (19–07)')
+const MOVE_LABEL: Record<string, string> = { stay: 'Estadia', consumption: 'Consumo', withdrawal: 'Sangria', supply: 'Suprimento', correction: 'Correção' }
 
 async function Caixa() {
   await connection()
@@ -55,10 +57,10 @@ async function Caixa() {
             <TableBody>
               {summary.movements.map((mv) => (
                 <TableRow key={String(mv.id)}>
-                  <TableCell>{new Date(mv.occurredAt).toLocaleTimeString('pt-BR')}</TableCell>
-                  <TableCell>{mv.type}</TableCell>
-                  <TableCell>{money(Number(mv.amount))}</TableCell>
-                  <TableCell>{mv.description ?? '—'}</TableCell>
+                  <TableCell className="tnum text-muted-foreground">{new Date(mv.occurredAt).toLocaleTimeString('pt-BR')}</TableCell>
+                  <TableCell>{MOVE_LABEL[mv.type] ?? mv.type}</TableCell>
+                  <TableCell className="tnum font-medium">{money(Number(mv.amount))}</TableCell>
+                  <TableCell className="text-muted-foreground">{mv.description ?? '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -71,7 +73,12 @@ async function Caixa() {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="text-lg font-semibold">{value}</div></div>
+  return (
+    <div className="rounded-xl border bg-muted/30 p-3">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="tnum mt-0.5 font-display text-xl font-bold">{value}</div>
+    </div>
+  )
 }
 
 function ClosedHistory({ closed }: { closed: Awaited<ReturnType<typeof listClosedShifts>> }) {
@@ -101,8 +108,8 @@ function ClosedHistory({ closed }: { closed: Awaited<ReturnType<typeof listClose
 
 export default function CaixaPage() {
   return (
-    <main className="mx-auto mt-8 max-w-4xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">Caixa</h1>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
+      <PageHeader title="Caixa" subtitle="Abra o turno, registre sangrias e suprimentos e feche o caixa." />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <Caixa />
       </Suspense>

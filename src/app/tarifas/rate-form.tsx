@@ -27,7 +27,7 @@ export function RateForm({ categoryId, rate }: { categoryId: number; rate: Rate 
       <Field name="extraGuestPrice" label="Pessoa+" defaultValue={rate.extraGuestPrice} />
       <Save />
       {state.error && <span className="text-destructive text-xs">{state.error}</span>}
-      {state.ok && <span className="text-xs text-emerald-600">ok</span>}
+      {state.ok && <span className="text-xs text-[var(--room-free)]">ok</span>}
     </form>
   )
 }

@@ -16,7 +16,7 @@ export function TierForm() {
       <div className="grid gap-1"><Label htmlFor="discountPercent" className="text-xs">Desconto %</Label><Input id="discountPercent" name="discountPercent" type="number" min="1" max="100" className="w-24" required /></div>
       <Save />
       {state.error && <span className="text-destructive text-xs">{state.error}</span>}
-      {state.ok && <span className="text-xs text-emerald-600">salvo</span>}
+      {state.ok && <span className="text-xs text-[var(--room-free)]">salvo</span>}
     </form>
   )
 }
