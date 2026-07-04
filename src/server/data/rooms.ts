@@ -1,7 +1,15 @@
 import 'server-only'
 import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
+import { logEvent } from '@/server/audit'
 import type { RoomStatus } from '@/generated/prisma/client'
+
+const STATUS_PT: Record<RoomStatus, string> = {
+  free: 'livre',
+  occupied: 'ocupado',
+  cleaning: 'limpeza',
+  maintenance: 'manutenção',
+}
 
 export async function listRoomsWithCurrentStay() {
   const me = await getCurrentUser()
@@ -27,8 +35,16 @@ export async function setRoomStatus(number: string, status: RoomStatus, reason?:
     throw new Error('Forbidden')
   }
   if (status === 'maintenance' && !reason) throw new Error('Maintenance requires a reason')
-  return db.room.update({
+  const room = await db.room.update({
     where: { number },
     data: { status, maintenanceReason: status === 'maintenance' ? reason : null },
   })
+  await logEvent({
+    type: 'room.status',
+    description: `Quarto ${number} → ${STATUS_PT[status]}${status === 'maintenance' && reason ? ` (${reason})` : ''}`,
+    entity: 'room',
+    entityId: number,
+    roomNumber: number,
+  })
+  return room
 }

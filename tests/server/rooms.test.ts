@@ -7,8 +7,11 @@ import { db } from '@/server/db'
 import { listRoomsWithCurrentStay, setRoomStatus } from '@/server/data/rooms'
 
 beforeEach(async () => {
+  await db.eventLog.deleteMany()
   await db.loyaltyRedemption.deleteMany()
   await db.stay.deleteMany(); await db.room.deleteMany(); await db.rate.deleteMany(); await db.roomCategory.deleteMany()
+  await db.employee.deleteMany()
+  await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
   await db.room.create({ data: { number: '01', status: 'free' } })
   session.current = { id: 1, name: 'Boss', role: 'reception' }
 })
@@ -36,5 +39,17 @@ describe('rooms DAL', () => {
   })
   it('cannot set occupied directly', async () => {
     await expect(setRoomStatus('01', 'occupied')).rejects.toThrow(/check-in/i)
+  })
+})
+
+describe('audit trail', () => {
+  it('setRoomStatus writes a room.status event with the new status', async () => {
+    await setRoomStatus('01', 'cleaning')
+    const ev = await db.eventLog.findMany({ where: { type: 'room.status' } })
+    expect(ev).toHaveLength(1)
+    expect(ev[0].entity).toBe('room')
+    expect(ev[0].entityId).toBe('01')
+    expect(ev[0].roomNumber).toBe('01')
+    expect(ev[0].description).toContain('limpeza')
   })
 })
