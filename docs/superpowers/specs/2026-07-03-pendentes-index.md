@@ -12,7 +12,7 @@ Specs das features que faltavam do escopo original (`../../../../MotelAc/docs/an
 - **Cancelamento:** Gerente sempre; Recepção só com o turno/caixa aberto; estorno (não deleção).
 
 ## Ordem de build recomendada
-1. **[Auditoria](2026-07-03-auditoria-design.md)** — fundação `logEvent`; os outros já nascem emitindo evento.
+1. ~~**[Auditoria](2026-07-03-auditoria-design.md)**~~ — ✅ **feito** (2026-07-04). Fundação `logEvent` + retrofit das mutações + tela `/auditoria` + `audit:view`. Planos: `../plans/2026-07-04-auditoria-fundacao.md`, `../plans/2026-07-04-auditoria-tela.md`.
 2. **[Financeiro](2026-07-03-financeiro-design.md)** — contas/custos/faturamento; destrava relatórios.
 3. **[Cancelamento](2026-07-03-cancelamento-design.md)** — cancelar entrada/saída com estorno.
 4. **[Ticket térmico](2026-07-03-ticket-termico-design.md)** — comprovante 80mm na saída + reimpressão.
