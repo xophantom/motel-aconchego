@@ -3,6 +3,7 @@ import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { currentPeriod, businessDateFor } from '@/lib/shift'
+import { logEvent } from '@/server/audit'
 import type { CashMovementInput } from '@/lib/validation/shift'
 
 async function requireCash() {
@@ -22,7 +23,9 @@ export async function openShift(input: { openingBalance: number }) {
   const period = currentPeriod(now)
   const existing = await db.shift.findUnique({ where: { businessDate_period: { businessDate, period } } })
   if (existing) throw new Error(existing.closedAt ? 'Caixa já fechado neste período' : 'Caixa já aberto')
-  return db.shift.create({ data: { businessDate, period, employeeId: me.id, openedAt: now, openingBalance: input.openingBalance } })
+  const shift = await db.shift.create({ data: { businessDate, period, employeeId: me.id, openedAt: now, openingBalance: input.openingBalance } })
+  await logEvent({ type: 'shift.open', description: `Caixa aberto · saldo inicial R$ ${input.openingBalance.toFixed(2)}`, entity: 'shift', entityId: String(shift.id) })
+  return shift
 }
 
 export async function closeShift(shiftId: bigint, input: { closingBalance: number }) {
@@ -32,6 +35,7 @@ export async function closeShift(shiftId: bigint, input: { closingBalance: numbe
   const now = new Date()
   const metrics = await shiftMetrics({ ...shift, closedAt: now })
   await db.shift.update({ where: { id: shiftId }, data: { closedAt: now, closingBalance: input.closingBalance } })
+  await logEvent({ type: 'shift.close', description: `Caixa fechado · saldo R$ ${metrics.saldo.toFixed(2)}`, entity: 'shift', entityId: String(shiftId) })
   return metrics
 }
 
@@ -43,9 +47,12 @@ export async function addCashMovement(input: CashMovementInput) {
   let amount = input.amount
   if (input.type === 'withdrawal') amount = -Math.abs(amount)
   if (input.type === 'supply') amount = Math.abs(amount)
-  return db.cashMovement.create({
+  const mov = await db.cashMovement.create({
     data: { type: input.type, amount, employeeId: me.id, shiftId: open?.id ?? null, occurredAt: now, description: input.description },
   })
+  const label = input.type === 'withdrawal' ? 'Sangria' : input.type === 'supply' ? 'Suprimento' : 'Correção'
+  await logEvent({ type: `cash.${input.type}`, description: `${label} R$ ${Math.abs(amount).toFixed(2)}${input.description ? ` · ${input.description}` : ''}`, entity: 'cash', entityId: String(mov.id) })
+  return mov
 }
 
 export type ShiftMetrics = {
