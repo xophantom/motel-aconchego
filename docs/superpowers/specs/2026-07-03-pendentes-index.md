@@ -13,7 +13,7 @@ Specs das features que faltavam do escopo original (`../../../../MotelAc/docs/an
 
 ## Ordem de build recomendada
 1. ~~**[Auditoria](2026-07-03-auditoria-design.md)**~~ — ✅ **feito** (2026-07-04). Fundação `logEvent` + retrofit das mutações + tela `/auditoria` + `audit:view`. Planos: `../plans/2026-07-04-auditoria-fundacao.md`, `../plans/2026-07-04-auditoria-tela.md`.
-2. **[Financeiro](2026-07-03-financeiro-design.md)** — contas/custos/faturamento; destrava relatórios.
+2. ~~**[Financeiro](2026-07-03-financeiro-design.md)**~~ — ✅ **feito** (2026-07-04). Contas + centros de custo + faturamento computado (`net` = caixa + contas) + CSV/PDF + `finance:manage`. Planos: `../plans/2026-07-04-financeiro-1-contas-centros.md`, `-2-faturamento.md`, `-3-ui.md`.
 3. **[Cancelamento](2026-07-03-cancelamento-design.md)** — cancelar entrada/saída com estorno.
 4. **[Ticket térmico](2026-07-03-ticket-termico-design.md)** — comprovante 80mm na saída + reimpressão.
 5. **[Reposição de estoque](2026-07-03-reposicao-estoque-design.md)** — entrada/ajuste com histórico.
