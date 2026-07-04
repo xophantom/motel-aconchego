@@ -49,3 +49,17 @@ export async function redeemTier(input: { customerId: bigint; tierId: number; st
   await db.loyaltyRedemption.create({ data: { customerId: input.customerId, tierId: tier.id, stayId: input.stayId } })
   return tier.discountPercent
 }
+
+/** Apply a loyalty tier to the room's open stay: validates availability, records the
+ *  redemption, and writes the discount onto the stay. Returns the discount percent. */
+export async function applyTierToRoom(roomNumber: string, tierId: number) {
+  await requireOps()
+  const room = await db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true } })
+  const stay = room.currentStay
+  if (!stay || stay.status !== 'open' || !stay.customerId) throw new Error('no open stay with customer')
+  const av = await availableTiers(stay.customerId, stay.id)
+  if (!av.tiers.some((t) => t.id === tierId)) throw new Error('benefit unavailable')
+  const pct = await redeemTier({ customerId: stay.customerId, tierId, stayId: stay.id })
+  await db.stay.update({ where: { id: stay.id }, data: { discountPercent: pct } })
+  return pct
+}

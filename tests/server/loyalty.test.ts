@@ -4,11 +4,11 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { upsertTier, listTiers, customerByPlate, customerVisits, availableTiers, redeemTier } from '@/server/data/loyalty'
+import { upsertTier, listTiers, customerByPlate, customerVisits, availableTiers, redeemTier, applyTierToRoom } from '@/server/data/loyalty'
 
 beforeEach(async () => {
   await db.loyaltyRedemption.deleteMany(); await db.loyaltyTier.deleteMany()
-  await db.stay.deleteMany(); await db.customer.deleteMany(); await db.room.deleteMany()
+  await db.room.deleteMany(); await db.stay.deleteMany(); await db.customer.deleteMany()
   session.current = { id: 1, name: 'Boss', role: 'manager' }
 })
 
@@ -55,5 +55,29 @@ describe('plate + visits + redemption', () => {
     av = await availableTiers(c.id)
     expect(av.tiers).toHaveLength(0)
     await expect(redeemTier({ customerId: c.id, tierId: t5.id, stayId: stay.id })).rejects.toThrow()
+  })
+})
+
+describe('applyTierToRoom', () => {
+  it('redeems the tier and writes the discount onto the open stay; refuses a second apply', async () => {
+    session.current = { id: 1, name: 'M', role: 'manager' }
+    const t = await upsertTier({ minVisits: 1, discountPercent: 40 })
+    session.current = { id: 1, name: 'R', role: 'reception' }
+    const c = await customerByPlate('CCC2222')
+    await db.stay.create({ data: { type: 'room', customerId: c.id, checkIn: new Date(), checkOut: new Date(), status: 'closed', day: 'normal', guests: 2 } })
+    const stay = await db.stay.create({ data: { type: 'room', customerId: c.id, checkIn: new Date(), status: 'open', day: 'normal', guests: 2 } })
+    await db.room.create({ data: { number: '201', status: 'occupied', currentStayId: stay.id } })
+
+    const pct = await applyTierToRoom('201', t.id)
+    expect(pct).toBe(40)
+    const updated = await db.stay.findUniqueOrThrow({ where: { id: stay.id } })
+    expect(updated.discountPercent).toBe(40)
+    await expect(applyTierToRoom('201', t.id)).rejects.toThrow()
+  })
+
+  it('throws when the room has no open stay with a customer', async () => {
+    session.current = { id: 1, name: 'R', role: 'reception' }
+    await db.room.create({ data: { number: '202', status: 'free' } })
+    await expect(applyTierToRoom('202', 1)).rejects.toThrow(/no open stay/i)
   })
 })

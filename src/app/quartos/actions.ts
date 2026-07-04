@@ -7,7 +7,7 @@ import { setRoomStatus } from '@/server/data/rooms'
 import type { RoomStatus } from '@/generated/prisma/client'
 import { addConsumptionSchema } from '@/lib/validation/product'
 import { addConsumption, removeConsumption, walkinSale } from '@/server/data/consumption'
-import { redeemTier, availableTiers } from '@/server/data/loyalty'
+import { applyTierToRoom } from '@/server/data/loyalty'
 
 export type ActionState = { ok: boolean; error?: string }
 
@@ -17,6 +17,8 @@ function mapErr(e: unknown): string {
     if (/not free/i.test(e.message)) return 'Quarto não está livre.'
     if (/not occupied/i.test(e.message)) return 'Quarto não está ocupado.'
     if (/reason/i.test(e.message)) return 'Manutenção exige um motivo.'
+    if (/no open stay/i.test(e.message)) return 'Sem cliente na estadia.'
+    if (/benefit unavailable/i.test(e.message)) return 'Benefício indisponível.'
   }
   return 'Erro ao processar.'
 }
@@ -32,15 +34,7 @@ export async function checkInAction(_prev: ActionState, fd: FormData): Promise<A
 }
 
 export async function applyBenefitAction(roomNumber: string, tierId: number): Promise<ActionState> {
-  try {
-    const room = await (await import('@/server/db')).db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true } })
-    const stay = room.currentStay
-    if (!stay || stay.status !== 'open' || !stay.customerId) return { ok: false, error: 'Sem cliente na estadia.' }
-    const av = await availableTiers(stay.customerId, stay.id)
-    if (!av.tiers.some((t) => t.id === tierId)) return { ok: false, error: 'Benefício indisponível.' }
-    const pct = await redeemTier({ customerId: stay.customerId, tierId, stayId: stay.id })
-    await (await import('@/server/db')).db.stay.update({ where: { id: stay.id }, data: { discountPercent: pct } })
-  } catch (e) { return { ok: false, error: mapErr(e) } }
+  try { await applyTierToRoom(roomNumber, tierId) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }
