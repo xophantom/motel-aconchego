@@ -22,6 +22,7 @@ async function NavContent() {
           { href: '/tarifas', label: 'Tarifas' },
           { href: '/produtos', label: 'Produtos' },
           { href: '/relatorios', label: 'Relatórios' },
+          { href: '/financeiro', label: 'Financeiro' },
           { href: '/fidelidade', label: 'Fidelidade' },
           { href: '/users', label: 'Funcionários' },
           { href: '/auditoria', label: 'Auditoria' },
