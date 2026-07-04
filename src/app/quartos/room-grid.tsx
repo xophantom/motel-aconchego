@@ -111,10 +111,10 @@ function RoomCard({ room, products }: { room: Room; products: Product[] }) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display">
+          <DialogTitle className="flex items-center gap-2 pr-8 font-display">
             Quarto {room.number}
             {room.category && <span className="text-sm font-normal text-muted-foreground">· {room.category.description}</span>}
-            <Badge variant="secondary" className="ml-auto">{STATUS_LABEL[room.status]}</Badge>
+            <Badge variant="secondary" className="ml-auto mr-2">{STATUS_LABEL[room.status]}</Badge>
           </DialogTitle>
         </DialogHeader>
         {room.status === 'free' && <FreeActions room={room} onDone={() => setOpen(false)} />}
@@ -250,7 +250,8 @@ function AddConsumption({ stayId, products }: { stayId: string; products: Produc
     <form action={formAction} className="flex items-end gap-2 border-t pt-2">
       <div className="grid gap-1">
         <Label htmlFor="productCode" className="text-xs">Produto</Label>
-        <NativeSelect id="productCode" name="productCode" className="h-8 w-40" defaultValue={products[0]?.code}>
+        <NativeSelect id="productCode" name="productCode" className="h-8 w-40" defaultValue="" required>
+          <NativeSelectOption value="" disabled>Selecione…</NativeSelectOption>
           {products.map((p) => <NativeSelectOption key={p.code} value={p.code}>{p.description}</NativeSelectOption>)}
         </NativeSelect>
       </div>
@@ -353,11 +354,12 @@ function VendaAvulsa({ products }: { products: Product[] }) {
 }
 
 function AddToCart({ products, onAdd }: { products: Product[]; onAdd: (code: string, qty: number) => void }) {
-  const [code, setCode] = useState(products[0]?.code ?? '')
+  const [code, setCode] = useState('')
   const [qty, setQty] = useState(1)
   return (
     <div className="flex items-end gap-2">
       <NativeSelect value={code} onChange={(e) => setCode(e.target.value)} className="h-8 w-40">
+        <NativeSelectOption value="">Selecione…</NativeSelectOption>
         {products.map((p) => <NativeSelectOption key={p.code} value={p.code}>{p.description}</NativeSelectOption>)}
       </NativeSelect>
       <Input type="number" min="1" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-8 w-16" />
