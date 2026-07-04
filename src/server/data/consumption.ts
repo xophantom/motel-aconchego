@@ -3,6 +3,7 @@ import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { getOpenShiftFor } from '@/server/data/shifts'
+import { logEvent } from '@/server/audit'
 
 async function requireOps() {
   const me = await getCurrentUser()
@@ -17,12 +18,14 @@ export async function addConsumption(input: { stayId: bigint; productCode: strin
   const product = await db.product.findUniqueOrThrow({ where: { code: input.productCode } })
   const unitPrice = Number(product.price)
   const lineTotal = unitPrice * input.qty
-  return db.$transaction(async (tx) => {
+  const item = await db.$transaction(async (tx) => {
     const item = await tx.consumption.create({ data: { stayId: input.stayId, productCode: input.productCode, qty: input.qty, unitPrice } })
     await tx.stay.update({ where: { id: input.stayId }, data: { consumptionAmount: { increment: lineTotal } } })
     if (product.trackStock) await tx.product.update({ where: { code: input.productCode }, data: { stockQty: { decrement: input.qty } } })
     return item
   })
+  await logEvent({ type: 'consumption.add', description: `Consumo +${input.qty}× ${product.description} · quarto ${stay.roomNumber ?? '—'}`, entity: 'stay', entityId: String(input.stayId), roomNumber: stay.roomNumber })
+  return item
 }
 
 export async function listConsumption(stayId: bigint) {
@@ -49,6 +52,7 @@ export async function removeConsumption(id: bigint) {
       if (product?.trackStock) await tx.product.update({ where: { code: item.productCode }, data: { stockQty: { increment: item.qty } } })
     }
   })
+  await logEvent({ type: 'consumption.remove', description: `Consumo removido · ${item.qty}× (${item.productCode ?? '—'})`, entity: 'stay', entityId: String(item.stayId), roomNumber: item.stay.roomNumber })
 }
 
 export async function walkinSale(input: { items: { productCode: string; qty: number }[] }) {
@@ -64,7 +68,7 @@ export async function walkinSale(input: { items: { productCode: string; qty: num
   const total = input.items.reduce((a, i) => a + priceOf(i.productCode) * i.qty, 0)
   const now = new Date()
   const openShiftId = (await getOpenShiftFor(now))?.id ?? null
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
       data: { type: 'walkin', roomNumber: '99', checkIn: now, checkOut: now, status: 'closed', stayAmount: 0, consumptionAmount: total, paymentEmployeeId: me.id },
     })
@@ -76,4 +80,6 @@ export async function walkinSale(input: { items: { productCode: string; qty: num
     await tx.cashMovement.create({ data: { type: 'consumption', stayId: stay.id, amount: total, employeeId: me.id, shiftId: openShiftId, occurredAt: now, description: 'Venda avulsa' } })
     return { stay, total }
   })
+  await logEvent({ type: 'consumption.walkin', description: `Venda avulsa · R$ ${total.toFixed(2)}`, entity: 'stay', entityId: String(result.stay.id) })
+  return result
 }
