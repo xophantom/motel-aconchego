@@ -10,7 +10,7 @@ let stayId: bigint
 beforeEach(async () => {
   await db.eventLog.deleteMany(); await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.consumption.deleteMany(); await db.stay.deleteMany()
-  await db.product.deleteMany(); await db.room.deleteMany(); await db.rate.deleteMany()
+  await db.stockMovement.deleteMany(); await db.product.deleteMany(); await db.room.deleteMany(); await db.rate.deleteMany()
   await db.roomCategory.deleteMany(); await db.employee.deleteMany()
   await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
   const cat = await db.roomCategory.create({ data: { code: 'C', description: 'Rústico', billing: 'motel', minPeriodMin: 180, maxPeriodMin: 720, includedGuests: 2 } })

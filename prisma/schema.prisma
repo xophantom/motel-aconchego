@@ -84,6 +84,15 @@ enum LedgerKind {
   @@map("ledger_kind")
 }
 
+enum StockMovementReason {
+  restock
+  loss
+  inventory
+  correction
+
+  @@map("stock_movement_reason")
+}
+
 model RoomCategory {
   id             Int         @id @default(autoincrement()) @db.SmallInt
   code           String      @unique @db.Char(1)
@@ -122,6 +131,7 @@ model Employee {
   staysEntered Stay[]         @relation("entry")
   staysPaid    Stay[]         @relation("payment")
   staysCanceled Stay[]        @relation("canceled")
+  stockMovements StockMovement[]
   movements    CashMovement[]
   shifts       Shift[]
   events       EventLog[]
@@ -152,8 +162,25 @@ model Product {
   minStock     Int             @default(0) @map("min_stock")
   trackStock   Boolean         @default(true) @map("track_stock")
   consumptions Consumption[]
+  movements    StockMovement[]
 
   @@map("product")
+}
+
+model StockMovement {
+  id          BigInt              @id @default(autoincrement())
+  productCode String              @map("product_code")
+  qty         Int
+  reason      StockMovementReason
+  unitCost    Decimal?            @map("unit_cost") @db.Decimal(10, 2)
+  note        String?
+  employeeId  Int?                @map("employee_id")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  product     Product             @relation(fields: [productCode], references: [code])
+  employee    Employee?           @relation(fields: [employeeId], references: [id])
+
+  @@index([productCode])
+  @@map("stock_movement")
 }
 
 model CostCenter {

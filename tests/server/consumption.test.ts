@@ -12,7 +12,7 @@ beforeEach(async () => {
   await db.eventLog.deleteMany()
   await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.consumption.deleteMany(); await db.stay.deleteMany()
-  await db.shift.deleteMany(); await db.product.deleteMany(); await db.room.deleteMany()
+  await db.shift.deleteMany(); await db.stockMovement.deleteMany(); await db.product.deleteMany(); await db.room.deleteMany()
   await db.rate.deleteMany(); await db.roomCategory.deleteMany(); await db.employee.deleteMany()
   await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
   await db.room.create({ data: { number: '01', status: 'occupied' } })

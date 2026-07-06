@@ -12,7 +12,7 @@ import { updateCategory } from '@/server/data/tariff'
 beforeEach(async () => {
   await db.eventLog.deleteMany()
   await db.loyaltyTier.deleteMany()
-  await db.product.deleteMany()
+  await db.stockMovement.deleteMany(); await db.product.deleteMany()
   await db.rate.deleteMany()
   await db.roomCategory.deleteMany()
   await db.employee.deleteMany()

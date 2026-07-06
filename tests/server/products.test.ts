@@ -7,7 +7,7 @@ import { db } from '@/server/db'
 import { listProducts, upsertProduct } from '@/server/data/products'
 
 beforeEach(async () => {
-  await db.consumption.deleteMany(); await db.product.deleteMany()
+  await db.consumption.deleteMany(); await db.stockMovement.deleteMany(); await db.product.deleteMany()
   session.current = { id: 1, name: 'Boss', role: 'manager' }
 })
 
