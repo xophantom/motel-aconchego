@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Bricolage_Grotesque, Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppNav } from "@/components/app-nav";
+import { NavGate } from "@/components/nav-gate";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -33,7 +35,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          <AppNav />
+          <Suspense fallback={null}><NavGate><AppNav /></NavGate></Suspense>
           {children}
         </ThemeProvider>
       </body>
