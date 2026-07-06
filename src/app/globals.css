@@ -164,3 +164,24 @@
     radial-gradient(60rem 40rem at 8% 108%, oklch(0.79 0.14 68 / 6%), transparent 60%);
   background-attachment: fixed;
 }
+
+/* ---- Thermal ticket (80mm) ---- */
+.ticket-page { max-width: 80mm; margin: 0 auto; padding: 8px; }
+.ticket { width: 80mm; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; padding: 6px 8px; }
+.ticket .t-center { text-align: center; }
+.ticket .t-bold { font-weight: 700; }
+.ticket .t-small { font-size: 10px; }
+.ticket .t-sep { border-top: 1px dashed #000; margin: 4px 0; }
+.ticket .t-row { display: flex; justify-content: space-between; gap: 8px; }
+.ticket .t-total { font-size: 14px; }
+.ticket-actions { margin-top: 12px; text-align: center; }
+.ticket-print-btn { border: 1px solid currentColor; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+
+@media print {
+  @page { size: 80mm auto; margin: 0; }
+  body { background: #fff; }
+  body * { visibility: hidden; }
+  #ticket, #ticket * { visibility: visible; }
+  #ticket { position: absolute; left: 0; top: 0; width: 80mm; }
+  .ticket-actions { display: none; }
+}
