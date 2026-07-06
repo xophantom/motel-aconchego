@@ -130,3 +130,30 @@ export async function staysOrdersReport(from: Date, to: Date): Promise<StaysOrde
     nWalkins: walkins.length, totalConsumption,
   }
 }
+
+export type BarRow = { productCode: string; description: string | null; category: string | null; qty: number; revenue: number }
+export type BarReport = { rows: BarRow[]; totals: { qty: number; revenue: number } }
+
+export async function barReport(from: Date, to: Date): Promise<BarReport> {
+  await requireReports()
+  const { start, end } = dayRange(from, to)
+  const items = await db.consumption.findMany({
+    where: { createdAt: { gte: start, lt: end } },
+    select: { productCode: true, qty: true, unitPrice: true, product: { select: { description: true, category: true } } },
+  })
+  const byProduct = new Map<string, BarRow>()
+  for (const it of items) {
+    const key = it.productCode ?? '?'
+    const row = byProduct.get(key) ?? { productCode: key, description: it.product?.description ?? null, category: it.product?.category ?? null, qty: 0, revenue: 0 }
+    row.qty += it.qty
+    row.revenue += it.qty * Number(it.unitPrice)
+    byProduct.set(key, row)
+  }
+  const rows = [...byProduct.values()]
+    .map((r) => ({ ...r, revenue: round2(r.revenue) }))
+    .sort((a, b) => b.revenue - a.revenue || a.productCode.localeCompare(b.productCode))
+  return {
+    rows,
+    totals: { qty: rows.reduce((a, r) => a + r.qty, 0), revenue: round2(rows.reduce((a, r) => a + r.revenue, 0)) },
+  }
+}
