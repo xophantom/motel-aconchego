@@ -2,6 +2,7 @@ import 'server-only'
 import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
+import type { ReportColumn } from '@/lib/report-format'
 
 export type ReportRow = {
   roomNumber: string
@@ -182,5 +183,109 @@ export async function operatorReport(from: Date, to: Date): Promise<OperatorRepo
   return {
     rows,
     totals: { aptos: rows.reduce((a, r) => a + r.aptos, 0), received: round2(rows.reduce((a, r) => a + r.received, 0)) },
+  }
+}
+
+export type ReportPeriod = { kind: 'month'; year: number; month: number } | { kind: 'range'; from: Date; to: Date }
+export type ReportView = { type: string; title: string; columns: ReportColumn[]; rows: Record<string, unknown>[]; total: Record<string, unknown> | null; period: ReportPeriod }
+
+export const REPORT_TYPES = ['occupancy', 'movement', 'stays_orders', 'bar', 'operator']
+
+function civilDate(s: string | undefined, fallback: Date): Date {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return fallback
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+export async function reportView(sp: Record<string, string | undefined>): Promise<ReportView> {
+  const type = REPORT_TYPES.includes(sp.type ?? '') ? (sp.type as string) : 'occupancy'
+  const now = new Date()
+
+  if (type === 'occupancy') {
+    const year = Number(sp.year) || now.getFullYear()
+    const month = Number(sp.month) || now.getMonth() + 1
+    const rep = await monthlyOccupancy(year, month)
+    return {
+      type, title: `Ocupação ${String(rep.month).padStart(2, '0')}/${rep.year}`,
+      columns: [
+        { key: 'roomNumber', label: 'Apto', kind: 'text' },
+        { key: 'categoryCode', label: 'Categoria', kind: 'text' },
+        { key: 'rentals', label: 'Locações', kind: 'int', align: 'right' },
+        { key: 'totalStay', label: 'Total estadia', kind: 'money', align: 'right' },
+        { key: 'avgTicket', label: 'Ticket médio', kind: 'money', align: 'right' },
+        { key: 'totalConsumption', label: 'Total consumo', kind: 'money', align: 'right' },
+      ],
+      rows: rep.rows as unknown as Record<string, unknown>[],
+      total: { roomNumber: 'TOTAL', rentals: rep.totals.rentals, totalStay: rep.totals.totalStay, avgTicket: rep.totals.avgTicket, totalConsumption: rep.totals.totalConsumption },
+      period: { kind: 'month', year: rep.year, month: rep.month },
+    }
+  }
+
+  const from = civilDate(sp.from, new Date(now.getFullYear(), now.getMonth(), 1))
+  const to = civilDate(sp.to, now)
+  const period: ReportPeriod = { kind: 'range', from, to }
+
+  if (type === 'movement') {
+    const rep = await movementReport(from, to)
+    return {
+      type, title: 'Movimento do período', period,
+      columns: [
+        { key: 'roomNumber', label: 'Quarto', kind: 'text' },
+        { key: 'checkIn', label: 'Entrada', kind: 'datetime' },
+        { key: 'checkOut', label: 'Saída', kind: 'datetime' },
+        { key: 'durationMin', label: 'Duração', kind: 'duration', align: 'right' },
+        { key: 'stayAmount', label: 'Estadia', kind: 'money', align: 'right' },
+        { key: 'consumption', label: 'Consumo', kind: 'money', align: 'right' },
+        { key: 'total', label: 'Total', kind: 'money', align: 'right' },
+        { key: 'operator', label: 'Operador', kind: 'text' },
+      ],
+      rows: rep.rows as unknown as Record<string, unknown>[],
+      total: { roomNumber: 'TOTAL', stayAmount: rep.totals.totalStay, consumption: rep.totals.totalConsumption, total: rep.totals.total },
+    }
+  }
+
+  if (type === 'stays_orders') {
+    const rep = await staysOrdersReport(from, to)
+    return {
+      type, title: 'Estadias & pedidos', period,
+      columns: [
+        { key: 'nStays', label: 'Estadias', kind: 'int', align: 'right' },
+        { key: 'totalStay', label: 'Total estadia', kind: 'money', align: 'right' },
+        { key: 'avgTicket', label: 'Ticket médio', kind: 'money', align: 'right' },
+        { key: 'nWalkins', label: 'Vendas avulsas', kind: 'int', align: 'right' },
+        { key: 'totalConsumption', label: 'Total consumo', kind: 'money', align: 'right' },
+      ],
+      rows: [rep as unknown as Record<string, unknown>],
+      total: null,
+    }
+  }
+
+  if (type === 'bar') {
+    const rep = await barReport(from, to)
+    return {
+      type, title: 'Produtos do bar', period,
+      columns: [
+        { key: 'productCode', label: 'Código', kind: 'text' },
+        { key: 'description', label: 'Produto', kind: 'text' },
+        { key: 'category', label: 'Categoria', kind: 'text' },
+        { key: 'qty', label: 'Qtd', kind: 'int', align: 'right' },
+        { key: 'revenue', label: 'Receita', kind: 'money', align: 'right' },
+      ],
+      rows: rep.rows as unknown as Record<string, unknown>[],
+      total: { productCode: 'TOTAL', qty: rep.totals.qty, revenue: rep.totals.revenue },
+    }
+  }
+
+  const rep = await operatorReport(from, to)
+  return {
+    type, title: 'Por operador', period,
+    columns: [
+      { key: 'operator', label: 'Operador', kind: 'text' },
+      { key: 'aptos', label: 'Aptos', kind: 'int', align: 'right' },
+      { key: 'received', label: 'Total recebido', kind: 'money', align: 'right' },
+      { key: 'avgTicket', label: 'Ticket médio', kind: 'money', align: 'right' },
+    ],
+    rows: rep.rows as unknown as Record<string, unknown>[],
+    total: { operator: 'TOTAL', aptos: rep.totals.aptos, received: rep.totals.received },
   }
 }
