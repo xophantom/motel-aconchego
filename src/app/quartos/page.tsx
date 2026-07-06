@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { listRoomsWithCurrentStay } from '@/server/data/rooms'
+import { canCancelNow } from '@/server/data/stays'
 import { listProducts } from '@/server/data/products'
 import { listConsumptionForStays } from '@/server/data/consumption'
 import { listCategoriesForBoard } from '@/server/data/tariff'
@@ -16,6 +17,7 @@ async function Board() {
     cats = await listCategoriesForBoard()
   } catch { redirect('/login') }
   const products = await listProducts()
+  const canCancel = await canCancelNow()
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
   const allCons = await listConsumptionForStays(openStayIds)
   const byStay = new Map<string, { id: string; description: string; qty: number; unitPrice: number }[]>()
@@ -48,9 +50,10 @@ async function Board() {
       pricing,
       consumption: s ? (byStay.get(String(s.id)) ?? []) : [],
       loyalty,
+      lastClosedStayId: r.lastClosedStayId != null ? String(r.lastClosedStayId) : null,
     }
   }))
-  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} />
+  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canCancel={canCancel} />
 }
 
 export default function QuartosPage() {

@@ -19,6 +19,10 @@ function mapErr(e: unknown): string {
     if (/reason/i.test(e.message)) return 'Manutenção exige um motivo.'
     if (/no open stay/i.test(e.message)) return 'Sem cliente na estadia.'
     if (/benefit unavailable/i.test(e.message)) return 'Benefício indisponível.'
+    if (/shift closed/i.test(e.message)) return 'Caixa fechado — só o gerente cancela.'
+    if (/room reoccupied/i.test(e.message)) return 'Quarto já foi reocupado.'
+    if (/no closed stay/i.test(e.message)) return 'Nada a cancelar.'
+    if (/reason required/i.test(e.message)) return 'Informe o motivo.'
   }
   return 'Erro ao processar.'
 }
@@ -41,6 +45,24 @@ export async function applyBenefitAction(roomNumber: string, tierId: number): Pr
 
 export async function checkOutAction(roomNumber: string): Promise<ActionState> {
   try { await stays.checkOut(roomNumber) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+const cancelSchema = z.object({ reason: z.string().trim().min(1) })
+
+export async function cancelCheckInAction(roomNumber: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const parsed = cancelSchema.safeParse({ reason: fd.get('reason') })
+  if (!parsed.success) return { ok: false, error: 'Informe o motivo.' }
+  try { await stays.cancelCheckIn(roomNumber, parsed.data.reason) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function cancelCheckOutAction(roomNumber: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const parsed = cancelSchema.safeParse({ reason: fd.get('reason') })
+  if (!parsed.success) return { ok: false, error: 'Informe o motivo.' }
+  try { await stays.cancelCheckOut(roomNumber, parsed.data.reason) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }

@@ -1,10 +1,10 @@
 import type { EmployeeRole } from '@/generated/prisma/client'
 
-export type Action = 'users:manage' | 'cash:withdraw' | 'room:status' | 'tariff:manage' | 'stay:manage' | 'cash:manage' | 'product:manage' | 'report:view' | 'loyalty:manage' | 'audit:view' | 'finance:manage'
+export type Action = 'users:manage' | 'cash:withdraw' | 'room:status' | 'tariff:manage' | 'stay:manage' | 'cash:manage' | 'product:manage' | 'report:view' | 'loyalty:manage' | 'audit:view' | 'finance:manage' | 'stay:cancel'
 
 const MATRIX: Record<EmployeeRole, Action[]> = {
-  manager:     ['users:manage', 'cash:withdraw', 'room:status', 'tariff:manage', 'stay:manage', 'cash:manage', 'product:manage', 'report:view', 'loyalty:manage', 'audit:view', 'finance:manage'],
-  reception:   ['cash:withdraw', 'room:status', 'stay:manage', 'cash:manage'],
+  manager:     ['users:manage', 'cash:withdraw', 'room:status', 'tariff:manage', 'stay:manage', 'cash:manage', 'product:manage', 'report:view', 'loyalty:manage', 'audit:view', 'finance:manage', 'stay:cancel'],
+  reception:   ['cash:withdraw', 'room:status', 'stay:manage', 'cash:manage', 'stay:cancel'],
   housekeeper: ['room:status'],
 }
 

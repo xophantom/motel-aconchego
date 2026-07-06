@@ -14,7 +14,7 @@ const STATUS_PT: Record<RoomStatus, string> = {
 export async function listRoomsWithCurrentStay() {
   const me = await getCurrentUser()
   if (!me) throw new Error('Forbidden')
-  return db.room.findMany({
+  const rooms = await db.room.findMany({
     where: { active: true },
     orderBy: { number: 'asc' },
     select: {
@@ -25,6 +25,20 @@ export async function listRoomsWithCurrentStay() {
       currentStay: { select: { id: true, checkIn: true, guests: true, day: true, chargeMode: true, categoryId: true, prepaidAmount: true, consumptionAmount: true, customerId: true, discountPercent: true, customer: { select: { plate: true } } } },
     },
   })
+  const reopenNumbers = rooms.filter((r) => r.status === 'free' || r.status === 'cleaning').map((r) => r.number)
+  const lastClosed = reopenNumbers.length
+    ? await db.stay.findMany({
+        where: { status: 'closed', type: 'room', roomNumber: { in: reopenNumbers } },
+        orderBy: [{ roomNumber: 'asc' }, { checkOut: 'desc' }],
+        distinct: ['roomNumber'],
+        select: { id: true, roomNumber: true },
+      })
+    : []
+  const lastByRoom = new Map(lastClosed.map((s) => [s.roomNumber!, s.id]))
+  return rooms.map((r) => ({
+    ...r,
+    lastClosedStayId: (r.status === 'free' || r.status === 'cleaning') ? (lastByRoom.get(r.number) ?? null) : null,
+  }))
 }
 
 export async function setRoomStatus(number: string, status: RoomStatus, reason?: string) {

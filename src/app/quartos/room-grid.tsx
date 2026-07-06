@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
-import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, type ActionState } from './actions'
+import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, cancelCheckInAction, cancelCheckOutAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
@@ -25,6 +25,7 @@ type Room = {
   pricing: Pricing | null
   consumption: ConsItem[]
   loyalty: Loyalty | null
+  lastClosedStayId: string | null
 }
 
 const STATUS_LABEL: Record<Room['status'], string> = { free: 'Livre', occupied: 'Ocupado', cleaning: 'Limpeza', maintenance: 'Manutenção' }
@@ -50,7 +51,7 @@ function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
   return base * (1 - stay.discountPercent / 100)
 }
 
-export function RoomGrid({ rooms, products }: { rooms: Room[]; products: Product[] }) {
+export function RoomGrid({ rooms, products, canCancel }: { rooms: Room[]; products: Product[]; canCancel: boolean }) {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -58,7 +59,7 @@ export function RoomGrid({ rooms, products }: { rooms: Room[]; products: Product
         <VendaAvulsa products={products} />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} />)}
+        {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} canCancel={canCancel} />)}
       </div>
     </div>
   )
@@ -78,7 +79,7 @@ function Legend() {
   )
 }
 
-function RoomCard({ room, products }: { room: Room; products: Product[] }) {
+function RoomCard({ room, products, canCancel }: { room: Room; products: Product[]; canCancel: boolean }) {
   const [open, setOpen] = useState(false)
   const occupied = room.status === 'occupied' && room.currentStay
   const now = useNow(!!occupied)
@@ -118,13 +119,16 @@ function RoomCard({ room, products }: { room: Room; products: Product[] }) {
           </DialogTitle>
         </DialogHeader>
         {room.status === 'free' && <FreeActions room={room} onDone={() => setOpen(false)} />}
-        {occupied && room.currentStay && <OccupiedPanel room={room} products={products} onDone={() => setOpen(false)} />}
+        {occupied && room.currentStay && <OccupiedPanel room={room} products={products} canCancel={canCancel} onDone={() => setOpen(false)} />}
         {room.status === 'cleaning' && <SimpleStatus number={room.number} status="free" label="Liberar (limpo)" onDone={() => setOpen(false)} />}
         {room.status === 'maintenance' && (
           <div className="grid gap-2">
             <p className="text-sm text-muted-foreground">Motivo: {room.maintenanceReason}</p>
             <SimpleStatus number={room.number} status="free" label="Voltar de manutenção" onDone={() => setOpen(false)} />
           </div>
+        )}
+        {canCancel && (room.status === 'free' || room.status === 'cleaning') && room.lastClosedStayId && (
+          <CancelExit roomNumber={room.number} onDone={() => setOpen(false)} />
         )}
       </DialogContent>
     </Dialog>
@@ -184,7 +188,7 @@ function FreeActions({ room, onDone }: { room: Room; onDone: () => void }) {
   )
 }
 
-function OccupiedPanel({ room, products, onDone }: { room: Room; products: Product[]; onDone: () => void }) {
+function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; products: Product[]; canCancel: boolean; onDone: () => void }) {
   const stay = room.currentStay!
   const now = useNow(true)
   const consumoTotal = room.consumption.reduce((a, c) => a + c.unitPrice * c.qty, 0)
@@ -235,7 +239,42 @@ function OccupiedPanel({ room, products, onDone }: { room: Room; products: Produ
         <p className="mt-1 text-xs text-muted-foreground">Valor final confirmado no servidor.</p>
       </div>
       <CheckOut roomNumber={room.number} onDone={onDone} />
+      {canCancel && <CancelEntry roomNumber={room.number} onDone={onDone} />}
     </div>
+  )
+}
+
+function CancelEntry({ roomNumber, onDone }: { roomNumber: string; onDone: () => void }) {
+  const [state, action] = useActionState<ActionState, FormData>(
+    (prev, fd) => cancelCheckInAction(roomNumber, prev, fd), { ok: false })
+  useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
+  return (
+    <details className="rounded-xl border border-destructive/40 p-3">
+      <summary className="cursor-pointer text-sm font-medium text-destructive">Cancelar entrada</summary>
+      <p className="mt-1 text-xs text-muted-foreground">Isto desfaz o check-in e estorna o antecipado.</p>
+      <form action={action} className="mt-2 flex gap-2">
+        <Input name="reason" placeholder="motivo" required />
+        <Button variant="outline" type="submit" className="border-destructive/50 text-destructive">Confirmar</Button>
+      </form>
+      {state.error && <p className="mt-1 text-destructive text-xs">{state.error}</p>}
+    </details>
+  )
+}
+
+function CancelExit({ roomNumber, onDone }: { roomNumber: string; onDone: () => void }) {
+  const [state, action] = useActionState<ActionState, FormData>(
+    (prev, fd) => cancelCheckOutAction(roomNumber, prev, fd), { ok: false })
+  useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
+  return (
+    <details className="rounded-xl border border-destructive/40 p-3">
+      <summary className="cursor-pointer text-sm font-medium text-destructive">Cancelar última saída</summary>
+      <p className="mt-1 text-xs text-muted-foreground">Reabre a estadia e estorna o saldo cobrado na saída.</p>
+      <form action={action} className="mt-2 flex gap-2">
+        <Input name="reason" placeholder="motivo" required />
+        <Button variant="outline" type="submit" className="border-destructive/50 text-destructive">Confirmar</Button>
+      </form>
+      {state.error && <p className="mt-1 text-destructive text-xs">{state.error}</p>}
+    </details>
   )
 }
 

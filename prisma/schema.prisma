@@ -121,6 +121,7 @@ model Employee {
   active       Boolean        @default(true)
   staysEntered Stay[]         @relation("entry")
   staysPaid    Stay[]         @relation("payment")
+  staysCanceled Stay[]        @relation("canceled")
   movements    CashMovement[]
   shifts       Shift[]
   events       EventLog[]
@@ -212,6 +213,9 @@ model Stay {
   status            StayStatus    @default(open)
   entryEmployeeId   Int?          @map("entry_employee_id")
   paymentEmployeeId Int?          @map("payment_employee_id")
+  canceledAt        DateTime?     @map("canceled_at") @db.Timestamptz
+  canceledReason    String?       @map("canceled_reason")
+  canceledById      Int?          @map("canceled_by_id")
   shiftId           BigInt?       @map("shift_id")
   legacySeq         BigInt?       @map("legacy_seq")
   room              Room?         @relation("roomStays", fields: [roomNumber], references: [number])
@@ -220,6 +224,7 @@ model Stay {
   customer          Customer?     @relation(fields: [customerId], references: [id])
   entryEmployee     Employee?     @relation("entry", fields: [entryEmployeeId], references: [id])
   paymentEmployee   Employee?     @relation("payment", fields: [paymentEmployeeId], references: [id])
+  canceledBy        Employee?     @relation("canceled", fields: [canceledById], references: [id])
   shift             Shift?        @relation(fields: [shiftId], references: [id])
   consumptions      Consumption[]
   movements         CashMovement[]
