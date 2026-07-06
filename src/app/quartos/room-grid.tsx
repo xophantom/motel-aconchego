@@ -238,7 +238,7 @@ function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; prod
         </div>
         <p className="mt-1 text-xs text-muted-foreground">Valor final confirmado no servidor.</p>
       </div>
-      <CheckOut roomNumber={room.number} onDone={onDone} />
+      <CheckOut roomNumber={room.number} stayId={stay.id} onDone={onDone} />
       {canCancel && <CancelEntry roomNumber={room.number} onDone={onDone} />}
     </div>
   )
@@ -306,10 +306,26 @@ function RemoveItem({ id }: { id: string }) {
   return <form action={action}><Button size="icon" variant="ghost" type="submit" className="size-6 text-muted-foreground hover:text-destructive" aria-label="Remover item">×</Button></form>
 }
 
-function CheckOut({ roomNumber, onDone }: { roomNumber: string; onDone: () => void }) {
+function CheckOut({ roomNumber, stayId, onDone }: { roomNumber: string; stayId: string; onDone: () => void }) {
   const [state, formAction] = useActionState<ActionState, FormData>(async () => checkOutAction(roomNumber), { ok: false })
-  useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
-  return <form action={formAction}><Submit className="w-full">Confirmar saída</Submit>{state.error && <p className="mt-1 text-destructive text-sm">{state.error}</p>}</form>
+  const [blocked, setBlocked] = useState(false)
+  useEffect(() => {
+    if (!state.ok) return
+    const w = window.open(`/ticket/${stayId}?auto=1`, 'ticket', 'width=380,height=640')
+    if (w) onDone()
+    else setBlocked(true)
+  }, [state.ok, stayId, onDone])
+  return (
+    <form action={formAction} className="grid gap-2">
+      <Submit className="w-full">Confirmar saída</Submit>
+      {state.error && <p className="mt-1 text-destructive text-sm">{state.error}</p>}
+      {blocked && (
+        <a href={`/ticket/${stayId}?auto=1`} target="_blank" rel="noopener" className="text-center text-sm font-medium text-primary underline">
+          Imprimir ticket
+        </a>
+      )}
+    </form>
+  )
 }
 
 function ApplyBenefit({ roomNumber, tier }: { roomNumber: string; tier: { id: number; discountPercent: number } }) {
