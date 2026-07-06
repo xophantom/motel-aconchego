@@ -1,9 +1,11 @@
-import type { MonthlyReport } from '@/server/data/reports'
+import type { ReportView } from '@/server/data/reports'
+import { formatCell } from '@/lib/report-format'
 
-export function toCsv(report: MonthlyReport): string {
-  const n = (v: number) => v.toFixed(2)
-  const header = 'Apto;Categoria;Locações;Total estadia;Ticket médio;Total consumo'
-  const lines = report.rows.map((r) => [r.roomNumber, r.categoryCode ?? '', r.rentals, n(r.totalStay), n(r.avgTicket), n(r.totalConsumption)].join(';'))
-  const total = ['TOTAL', '', report.totals.rentals, n(report.totals.totalStay), n(report.totals.avgTicket), n(report.totals.totalConsumption)].join(';')
-  return [header, ...lines, total].join('\n')
+export function toReportCsv(view: ReportView): string {
+  const header = view.columns.map((c) => c.label).join(';')
+  const line = (row: Record<string, unknown>) => view.columns.map((c) => formatCell(row[c.key], c.kind, 'csv')).join(';')
+  const body = view.rows.map(line)
+  const lines = [header, ...body]
+  if (view.total) lines.push(line(view.total))
+  return lines.join('\n')
 }
