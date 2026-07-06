@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { getStayForTicket } from '@/server/data/stays'
 import { TicketReceipt } from '../receipt'
 import { AutoPrint } from './auto-print'
+import { PrintButton } from './print-button'
 
 export async function TicketContent({ params, searchParams }: { params: Promise<{ stayId: string }>; searchParams: Promise<{ auto?: string }> }) {
   await connection()
@@ -17,7 +18,7 @@ export async function TicketContent({ params, searchParams }: { params: Promise<
       {auto === '1' && <AutoPrint />}
       <TicketReceipt data={data} />
       <div className="ticket-actions">
-        <button type="button" data-print className="ticket-print-btn">Imprimir</button>
+        <PrintButton stayId={data.id} logReprint={auto !== '1'} />
       </div>
     </div>
   )
