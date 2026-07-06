@@ -158,3 +158,48 @@ export async function canCancelNow(): Promise<boolean> {
   if (me.role === 'manager') return true
   return !!(await getOpenShiftFor(new Date()))
 }
+
+export type TicketData = {
+  id: string
+  roomNumber: string | null
+  categoryDescription: string | null
+  checkIn: Date
+  checkOut: Date | null
+  stayAmount: number
+  consumptionAmount: number
+  prepaidAmount: number
+  discountPercent: number
+  items: { description: string; qty: number; unitPrice: number }[]
+  entryOperator: string | null
+  paymentOperator: string | null
+}
+
+export async function getStayForTicket(stayId: bigint): Promise<TicketData | null> {
+  await requireOps()
+  const stay = await db.stay.findUnique({
+    where: { id: stayId },
+    select: {
+      id: true, roomNumber: true, checkIn: true, checkOut: true,
+      stayAmount: true, consumptionAmount: true, prepaidAmount: true, discountPercent: true,
+      category: { select: { description: true } },
+      entryEmployee: { select: { name: true } },
+      paymentEmployee: { select: { name: true } },
+      consumptions: { orderBy: { createdAt: 'asc' }, select: { qty: true, unitPrice: true, product: { select: { description: true } }, productCode: true } },
+    },
+  })
+  if (!stay) return null
+  return {
+    id: String(stay.id),
+    roomNumber: stay.roomNumber,
+    categoryDescription: stay.category?.description ?? null,
+    checkIn: stay.checkIn,
+    checkOut: stay.checkOut,
+    stayAmount: Number(stay.stayAmount ?? 0),
+    consumptionAmount: Number(stay.consumptionAmount ?? 0),
+    prepaidAmount: Number(stay.prepaidAmount ?? 0),
+    discountPercent: stay.discountPercent,
+    items: stay.consumptions.map((c) => ({ description: c.product?.description ?? c.productCode ?? '—', qty: c.qty, unitPrice: Number(c.unitPrice) })),
+    entryOperator: stay.entryEmployee?.name ?? null,
+    paymentOperator: stay.paymentEmployee?.name ?? null,
+  }
+}
