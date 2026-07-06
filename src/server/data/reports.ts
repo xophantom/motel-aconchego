@@ -157,3 +157,30 @@ export async function barReport(from: Date, to: Date): Promise<BarReport> {
     totals: { qty: rows.reduce((a, r) => a + r.qty, 0), revenue: round2(rows.reduce((a, r) => a + r.revenue, 0)) },
   }
 }
+
+export type OperatorRow = { employeeId: number | null; operator: string | null; aptos: number; received: number; avgTicket: number }
+export type OperatorReport = { rows: OperatorRow[]; totals: { aptos: number; received: number } }
+
+export async function operatorReport(from: Date, to: Date): Promise<OperatorReport> {
+  await requireReports()
+  const { start, end } = dayRange(from, to)
+  const stays = await db.stay.findMany({
+    where: { type: 'room', status: 'closed', checkOut: { gte: start, lt: end } },
+    select: { stayAmount: true, consumptionAmount: true, paymentEmployeeId: true, paymentEmployee: { select: { name: true } } },
+  })
+  const byOp = new Map<string, OperatorRow>()
+  for (const s of stays) {
+    const key = s.paymentEmployeeId != null ? String(s.paymentEmployeeId) : 'null'
+    const row = byOp.get(key) ?? { employeeId: s.paymentEmployeeId ?? null, operator: s.paymentEmployee?.name ?? null, aptos: 0, received: 0, avgTicket: 0 }
+    row.aptos += 1
+    row.received += Number(s.stayAmount ?? 0) + Number(s.consumptionAmount ?? 0)
+    byOp.set(key, row)
+  }
+  const rows = [...byOp.values()]
+    .map((r) => ({ ...r, received: round2(r.received), avgTicket: r.aptos > 0 ? round2(r.received / r.aptos) : 0 }))
+    .sort((a, b) => b.received - a.received)
+  return {
+    rows,
+    totals: { aptos: rows.reduce((a, r) => a + r.aptos, 0), received: round2(rows.reduce((a, r) => a + r.received, 0)) },
+  }
+}
