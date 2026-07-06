@@ -20,6 +20,17 @@ export type MonthlyReport = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+function dayRange(from: Date, to: Date) {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1)
+  return { start, end }
+}
+async function requireReports() {
+  const me = await getCurrentUser()
+  if (!me || !can(me.role, 'report:view')) throw new Error('Forbidden')
+  return me
+}
+
 export async function monthlyOccupancy(year: number, month: number): Promise<MonthlyReport> {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'report:view')) throw new Error('Forbidden')
@@ -47,4 +58,49 @@ export async function monthlyOccupancy(year: number, month: number): Promise<Mon
   const tStay = round2(rows.reduce((a, r) => a + r.totalStay, 0))
   const tCons = round2(rows.reduce((a, r) => a + r.totalConsumption, 0))
   return { year, month, rows, totals: { rentals: tRentals, totalStay: tStay, totalConsumption: tCons, avgTicket: tRentals > 0 ? round2(tStay / tRentals) : 0 } }
+}
+
+export type MovementRow = {
+  stayId: string; roomNumber: string | null; checkIn: Date; checkOut: Date | null
+  isEntry: boolean; isExit: boolean; durationMin: number | null
+  stayAmount: number | null; consumption: number; total: number; operator: string | null
+}
+export type MovementReport = { rows: MovementRow[]; totals: { entries: number; exits: number; totalStay: number; totalConsumption: number; total: number } }
+
+export async function movementReport(from: Date, to: Date): Promise<MovementReport> {
+  await requireReports()
+  const { start, end } = dayRange(from, to)
+  const stays = await db.stay.findMany({
+    where: {
+      type: 'room',
+      status: { not: 'canceled' },
+      OR: [{ checkIn: { gte: start, lt: end } }, { checkOut: { gte: start, lt: end } }],
+    },
+    orderBy: { checkIn: 'asc' },
+    select: {
+      id: true, roomNumber: true, checkIn: true, checkOut: true, stayAmount: true, consumptionAmount: true,
+      paymentEmployee: { select: { name: true } }, entryEmployee: { select: { name: true } },
+    },
+  })
+  const rows: MovementRow[] = stays.map((s) => {
+    const isEntry = s.checkIn >= start && s.checkIn < end
+    const isExit = !!s.checkOut && s.checkOut >= start && s.checkOut < end
+    const stayAmount = s.stayAmount != null ? Number(s.stayAmount) : null
+    const consumption = Number(s.consumptionAmount ?? 0)
+    const total = round2((stayAmount ?? 0) + consumption)
+    const durationMin = s.checkOut ? Math.max(0, Math.round((s.checkOut.getTime() - s.checkIn.getTime()) / 60000)) : null
+    return {
+      stayId: String(s.id), roomNumber: s.roomNumber, checkIn: s.checkIn, checkOut: s.checkOut,
+      isEntry, isExit, durationMin, stayAmount, consumption, total,
+      operator: s.paymentEmployee?.name ?? s.entryEmployee?.name ?? null,
+    }
+  })
+  const totals = {
+    entries: rows.filter((r) => r.isEntry).length,
+    exits: rows.filter((r) => r.isExit).length,
+    totalStay: round2(rows.reduce((a, r) => a + (r.stayAmount ?? 0), 0)),
+    totalConsumption: round2(rows.reduce((a, r) => a + r.consumption, 0)),
+    total: round2(rows.reduce((a, r) => a + r.total, 0)),
+  }
+  return { rows, totals }
 }
