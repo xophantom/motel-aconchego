@@ -104,3 +104,29 @@ export async function movementReport(from: Date, to: Date): Promise<MovementRepo
   }
   return { rows, totals }
 }
+
+export type StaysOrdersReport = { nStays: number; totalStay: number; avgTicket: number; nWalkins: number; totalConsumption: number }
+
+export async function staysOrdersReport(from: Date, to: Date): Promise<StaysOrdersReport> {
+  await requireReports()
+  const { start, end } = dayRange(from, to)
+  const rooms = await db.stay.findMany({
+    where: { type: 'room', status: 'closed', checkOut: { gte: start, lt: end } },
+    select: { stayAmount: true, consumptionAmount: true },
+  })
+  const walkins = await db.stay.findMany({
+    where: { type: 'walkin', status: 'closed', checkOut: { gte: start, lt: end } },
+    select: { consumptionAmount: true },
+  })
+  const nStays = rooms.length
+  const totalStay = round2(rooms.reduce((a, s) => a + Number(s.stayAmount ?? 0), 0))
+  const totalConsumption = round2(
+    rooms.reduce((a, s) => a + Number(s.consumptionAmount ?? 0), 0) +
+    walkins.reduce((a, s) => a + Number(s.consumptionAmount ?? 0), 0),
+  )
+  return {
+    nStays, totalStay,
+    avgTicket: nStays > 0 ? round2(totalStay / nStays) : 0,
+    nWalkins: walkins.length, totalConsumption,
+  }
+}
