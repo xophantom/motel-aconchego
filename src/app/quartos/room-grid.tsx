@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
+import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
 import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, cancelCheckInAction, cancelCheckOutAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
@@ -51,7 +52,7 @@ function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
   return base * (1 - stay.discountPercent / 100)
 }
 
-export function RoomGrid({ rooms, products, canCancel }: { rooms: Room[]; products: Product[]; canCancel: boolean }) {
+export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedReason }: { rooms: Room[]; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -59,7 +60,7 @@ export function RoomGrid({ rooms, products, canCancel }: { rooms: Room[]; produc
         <VendaAvulsa products={products} />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} canCancel={canCancel} />)}
+        {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} canCancel={canCancel} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />)}
       </div>
     </div>
   )
@@ -79,7 +80,7 @@ function Legend() {
   )
 }
 
-function RoomCard({ room, products, canCancel }: { room: Room; products: Product[]; canCancel: boolean }) {
+function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: { room: Room; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
   const [open, setOpen] = useState(false)
   const occupied = room.status === 'occupied' && room.currentStay
   const now = useNow(!!occupied)
@@ -118,7 +119,7 @@ function RoomCard({ room, products, canCancel }: { room: Room; products: Product
             <Badge variant="secondary" className="ml-auto mr-2">{STATUS_LABEL[room.status]}</Badge>
           </DialogTitle>
         </DialogHeader>
-        {room.status === 'free' && <FreeActions room={room} onDone={() => setOpen(false)} />}
+        {room.status === 'free' && <FreeActions room={room} onDone={() => setOpen(false)} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />}
         {occupied && room.currentStay && <OccupiedPanel room={room} products={products} canCancel={canCancel} onDone={() => setOpen(false)} />}
         {room.status === 'cleaning' && <SimpleStatus number={room.number} status="free" label="Liberar (limpo)" onDone={() => setOpen(false)} />}
         {room.status === 'maintenance' && (
@@ -152,7 +153,7 @@ function Section({ title, right, children }: { title: string; right?: React.Reac
   )
 }
 
-function FreeActions({ room, onDone }: { room: Room; onDone: () => void }) {
+export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { room: Room; onDone: () => void; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
   const [state, action] = useActionState<ActionState, FormData>(checkInAction, { ok: false })
   useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
   return (
@@ -169,10 +170,11 @@ function FreeActions({ room, onDone }: { room: Room; onDone: () => void }) {
           </div>
           <div className="grid gap-1">
             <Label htmlFor="day">Tabela</Label>
-            <NativeSelect id="day" name="day" defaultValue="normal">
+            <NativeSelect id="day" name="day" defaultValue={suggestedDay}>
               <NativeSelectOption value="normal">Semana</NativeSelectOption>
               <NativeSelectOption value="special">Fim de semana</NativeSelectOption>
             </NativeSelect>
+            <span className="text-[11px] text-muted-foreground">sugerido pela data: {dayReasonLabel(suggestedReason)}</span>
           </div>
         </div>
         <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
