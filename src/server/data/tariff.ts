@@ -52,7 +52,7 @@ export async function getTariffPolicy(): Promise<{ specialWeekdays: number[] }> 
   const me = await getCurrentUser()
   if (!me) throw new Error('Forbidden')
   const row = await db.tariffPolicy.findUnique({ where: { id: 1 } })
-  return { specialWeekdays: row?.specialWeekdays ?? DEFAULT_SPECIAL_WEEKDAYS }
+  return { specialWeekdays: row?.specialWeekdays ?? [...DEFAULT_SPECIAL_WEEKDAYS] }
 }
 
 export async function updateTariffPolicy(specialWeekdays: number[]): Promise<{ specialWeekdays: number[] }> {

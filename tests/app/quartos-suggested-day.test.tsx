@@ -1,5 +1,6 @@
 import { vi, describe, it, expect } from 'vitest'
 // Actions puxam server-only/next-cache; stub o módulo inteiro (qualquer named export vira no-op).
+// Vitest 4.1.9 checks module.then for thenable-detection during dynamic import; exclude 'then' so the stub isn't swallowed, and answer has() so named exports resolve.
 vi.mock('@/app/quartos/actions', () => new Proxy({}, {
   get: (_t, prop) => (prop === 'then' ? undefined : async () => ({ ok: false })),
   has: () => true,
