@@ -359,3 +359,9 @@ model LoyaltyRedemption {
   @@unique([customerId, tierId])
   @@map("loyalty_redemption")
 }
+
+model TariffPolicy {
+  id              Int   @id @default(1)
+  specialWeekdays Int[] @map("special_weekdays") // 0=Dom … 6=Sáb
+  @@map("tariff_policy")
+}

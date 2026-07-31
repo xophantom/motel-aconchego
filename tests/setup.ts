@@ -30,7 +30,7 @@ const { db } = await import('@/server/db')
 const APP_TABLES = [
   'stock_movement', 'event_log', 'wake_up_call', 'loyalty_redemption', 'consumption',
   'cash_movement', 'stay', 'ledger_entry', 'rate', 'shift', 'room', 'room_category',
-  'product', 'loyalty_tier', 'cost_center', 'customer', 'employee',
+  'product', 'loyalty_tier', 'cost_center', 'customer', 'employee', 'tariff_policy',
 ]
 
 beforeEach(async () => {
