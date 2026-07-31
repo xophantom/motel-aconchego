@@ -17,3 +17,8 @@ export const updateRateSchema = z.object({
 
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>
 export type UpdateRateInput = z.infer<typeof updateRateSchema>
+
+export const tariffPolicySchema = z.object({
+  specialWeekdays: z.array(z.coerce.number().int().min(0).max(6)),
+})
+export type TariffPolicyInput = z.infer<typeof tariffPolicySchema>
