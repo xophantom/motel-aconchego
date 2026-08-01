@@ -45,3 +45,24 @@ export async function listCategoriesForBoard() {
     })),
   }))
 }
+
+const DEFAULT_SPECIAL_WEEKDAYS = [5, 6]
+
+export async function getTariffPolicy(): Promise<{ specialWeekdays: number[] }> {
+  const me = await getCurrentUser()
+  if (!me) throw new Error('Forbidden')
+  const row = await db.tariffPolicy.findUnique({ where: { id: 1 } })
+  return { specialWeekdays: row?.specialWeekdays ?? [...DEFAULT_SPECIAL_WEEKDAYS] }
+}
+
+export async function updateTariffPolicy(specialWeekdays: number[]): Promise<{ specialWeekdays: number[] }> {
+  await requireTariffManager()
+  const clean = [...new Set(specialWeekdays.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort((a, b) => a - b)
+  const row = await db.tariffPolicy.upsert({
+    where: { id: 1 },
+    update: { specialWeekdays: clean },
+    create: { id: 1, specialWeekdays: clean },
+  })
+  await logEvent({ type: 'tariff.policy', description: `Dias especiais: [${clean.join(', ')}]`, entity: 'tariff_policy', entityId: '1' })
+  return { specialWeekdays: row.specialWeekdays }
+}

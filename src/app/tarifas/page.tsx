@@ -1,11 +1,14 @@
 import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
-import { listCategoriesWithRates } from '@/server/data/tariff'
+import { listCategoriesWithRates, getTariffPolicy } from '@/server/data/tariff'
+import { nationalHolidayList } from '@/lib/holidays'
+import { civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/page-header'
 import { RateForm } from './rate-form'
 import { CategoryForm } from './category-form'
+import { TariffPolicyForm } from './policy-form'
 
 const BILLING_LABEL: Record<string, string> = { motel: 'Motel (por tempo)', hotel: 'Hotel (diária)' }
 
@@ -13,8 +16,17 @@ async function TariffList() {
   await connection()
   let cats
   try { cats = await listCategoriesWithRates() } catch { redirect('/') }
+  const policy = await getTariffPolicy()
+  const year = civilDateInSaoPaulo(new Date()).year
+  const holidays = nationalHolidayList(year)
   return (
     <div className="grid gap-4">
+      <Card>
+        <CardHeader><CardTitle className="font-display">Política de dia especial</CardTitle></CardHeader>
+        <CardContent>
+          <TariffPolicyForm specialWeekdays={policy.specialWeekdays} year={year} holidays={holidays} />
+        </CardContent>
+      </Card>
       {cats.map((c) => (
         <Card key={c.id}>
           <CardHeader><CardTitle className="font-display">{c.code} — {c.description} <span className="text-muted-foreground text-sm font-normal">· {BILLING_LABEL[c.billing] ?? c.billing}</span></CardTitle></CardHeader>

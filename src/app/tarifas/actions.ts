@@ -1,6 +1,6 @@
 'use server'
 import { revalidatePath } from 'next/cache'
-import { updateCategorySchema, updateRateSchema } from '@/lib/validation/tariff'
+import { updateCategorySchema, updateRateSchema, tariffPolicySchema } from '@/lib/validation/tariff'
 import * as tariff from '@/server/data/tariff'
 
 export type ActionState = { ok: boolean; error?: string }
@@ -26,5 +26,16 @@ export async function updateRateAction(categoryId: number, _prev: ActionState, f
   try { await tariff.updateRate(categoryId, parsed.data) }
   catch (e) { return { ok: false, error: e instanceof Error && /forbidden/i.test(e.message) ? 'Sem permissão.' : 'Erro ao salvar.' } }
   revalidatePath('/tarifas')
+  return { ok: true }
+}
+
+export async function updateTariffPolicyAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const raw = fd.getAll('weekday').map((v) => Number(v))
+  const parsed = tariffPolicySchema.safeParse({ specialWeekdays: raw })
+  if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
+  try { await tariff.updateTariffPolicy(parsed.data.specialWeekdays) }
+  catch (e) { return { ok: false, error: e instanceof Error && /forbidden/i.test(e.message) ? 'Sem permissão.' : 'Erro ao salvar.' } }
+  revalidatePath('/tarifas')
+  revalidatePath('/quartos')
   return { ok: true }
 }
