@@ -165,6 +165,114 @@
   background-attachment: fixed;
 }
 
+/* ── Legado · Windows/VB6 clássico (cinza 3D, chapado, alto contraste) ─── */
+.legacy {
+  --background: #d4d0c8;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #000080;
+  --primary-foreground: #ffffff;
+  --secondary: #d4d0c8;
+  --secondary-foreground: #000000;
+  --muted: #ece9d8;
+  --muted-foreground: #404040;
+  --accent: #000080;
+  --accent-foreground: #ffffff;
+  --destructive: #a80000;
+  --border: #808080;
+  --input: #ffffff;
+  --ring: #000080;
+  --radius: 0rem;
+  --chart-1: #000080;
+  --chart-2: #808000;
+  --chart-3: #008000;
+  --chart-4: #808080;
+  --chart-5: #800000;
+
+  --room-free: #008000;
+  --room-occupied: #a80000;
+  --room-cleaning: #808000;
+  --room-maintenance: #606060;
+
+  --sidebar: #d4d0c8;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #000080;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ece9d8;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: #808080;
+  --sidebar-ring: #000080;
+}
+
+/* Fonte de sistema, sem display font, sem tracking negativo */
+.legacy { font-family: Tahoma, "Segoe UI", Verdana, Geneva, sans-serif; }
+.legacy h1, .legacy h2, .legacy h3, .legacy .font-display {
+  font-family: Tahoma, "Segoe UI", Verdana, Geneva, sans-serif;
+  letter-spacing: normal;
+}
+
+/* Achatar a pele moderna: sem glow/sombra/arredondado/animação */
+.legacy *, .legacy *::before, .legacy *::after {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+  backdrop-filter: none !important;
+}
+.legacy body { background-image: none !important; }
+
+/* Botões: bevel 3D clássico (claro em cima/esq, escuro em baixo/dir) */
+.legacy button {
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-top-color: #ffffff !important;
+  border-left-color: #ffffff !important;
+  border-right-color: #404040 !important;
+  border-bottom-color: #404040 !important;
+}
+.legacy button:active {
+  border-top-color: #404040 !important;
+  border-left-color: #404040 !important;
+  border-right-color: #ffffff !important;
+  border-bottom-color: #ffffff !important;
+}
+
+/* Campos afundados (sunken): inputs, textarea, selects */
+.legacy input, .legacy textarea, .legacy select {
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-top-color: #808080 !important;
+  border-left-color: #808080 !important;
+  border-right-color: #ffffff !important;
+  border-bottom-color: #ffffff !important;
+  background-color: #ffffff !important;
+}
+
+/* Painéis (cards/diálogos/popovers) como caixas brancas elevadas */
+.legacy .bg-card, .legacy .bg-popover {
+  border: 2px solid !important;
+  border-top-color: #ffffff !important;
+  border-left-color: #ffffff !important;
+  border-right-color: #404040 !important;
+  border-bottom-color: #404040 !important;
+}
+
+/* Tabelas densas com gridlines e header cinza */
+.legacy table { border-collapse: collapse !important; }
+.legacy th, .legacy td { border: 1px solid #808080 !important; }
+.legacy thead, .legacy th { background-color: #d4d0c8 !important; }
+
+/* Foco pontilhado clássico */
+.legacy :focus-visible { outline: 1px dotted #000000 !important; outline-offset: -3px; }
+
+/* Header como barra de título azul */
+.legacy header { background: #000080 !important; border-bottom-color: #000040 !important; }
+.legacy header a, .legacy header span, .legacy header button { color: #ffffff !important; }
+
 /* ---- Thermal ticket (80mm) ---- */
 .ticket-page { max-width: 80mm; margin: 0 auto; padding: 8px; }
 .ticket { width: 80mm; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; padding: 6px 8px; }

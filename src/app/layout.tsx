@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppNav } from "@/components/app-nav";
 import { NavGate } from "@/components/nav-gate";
+import { THEME_VALUES } from "@/lib/themes";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -34,7 +35,7 @@ export default function RootLayout({
       className={`${inter.variable} ${bricolage.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} themes={[...THEME_VALUES]} disableTransitionOnChange>
           <Suspense fallback={null}><NavGate><AppNav /></NavGate></Suspense>
           {children}
         </ThemeProvider>

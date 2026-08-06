@@ -3,7 +3,7 @@ import { connection } from 'next/server'
 import { getCurrentUser } from '@/server/session'
 import { signOut } from '@/server/auth'
 import { Button } from '@/components/ui/button'
-import { ModeToggle } from '@/components/mode-toggle'
+import { ThemeMenu } from '@/components/theme-menu'
 import { NavLinks } from '@/components/nav-links'
 
 const ROLE_LABEL = { manager: 'Gerente', reception: 'Recepção', housekeeper: 'Camareira' } as const
@@ -42,7 +42,7 @@ async function NavContent() {
           <span className="hidden text-xs text-muted-foreground sm:inline">
             {me.name} · {ROLE_LABEL[me.role]}
           </span>
-          <ModeToggle />
+          <ThemeMenu />
           <form action={async () => { 'use server'; await signOut({ redirectTo: '/login' }) }}>
             <Button variant="ghost" size="sm">Sair</Button>
           </form>
