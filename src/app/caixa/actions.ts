@@ -23,15 +23,15 @@ export async function openShiftAction(_prev: ActionState, fd: FormData): Promise
 }
 
 export async function closeShiftAction(shiftId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
-  const parsed = closeShiftSchema.safeParse({ closingBalance: fd.get('closingBalance') ?? 0 })
+  const parsed = closeShiftSchema.safeParse({ finalWithdrawCash: fd.get('finalWithdrawCash') ?? 0, finalWithdrawCard: fd.get('finalWithdrawCard') ?? 0 })
   if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
   try { await shifts.closeShift(BigInt(shiftId), parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
-  revalidatePath('/caixa')
+  revalidatePath('/caixa'); revalidatePath('/quartos')
   return { ok: true }
 }
 
 export async function cashMovementAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const parsed = cashMovementSchema.safeParse({ type: fd.get('type'), amount: fd.get('amount'), description: fd.get('description') ?? undefined })
+  const parsed = cashMovementSchema.safeParse({ type: fd.get('type'), amount: fd.get('amount'), method: fd.get('method') ?? undefined, description: fd.get('description') ?? undefined })
   if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
   try { await shifts.addCashMovement(parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/caixa')
