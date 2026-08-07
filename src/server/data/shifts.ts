@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { currentPeriod, businessDateFor } from '@/lib/shift'
 import { logEvent } from '@/server/audit'
-import type { CashMovementInput } from '@/lib/validation/shift'
+import type { CashMovementInput, CloseShiftInput } from '@/lib/validation/shift'
 import { getCashPolicy } from '@/server/data/cash-policy'
 
 async function requireCash() {
@@ -49,13 +49,20 @@ export async function openShift(input: { openingBalance: number }) {
   return shift
 }
 
-export async function closeShift(shiftId: bigint, input: { closingBalance: number }) {
-  await requireCash()
+export async function closeShift(shiftId: bigint, input: CloseShiftInput): Promise<ShiftMetrics> {
+  const me = await requireCash()
   const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId } })
   if (shift.closedAt) throw new Error('Caixa já fechado')
   const now = new Date()
-  const metrics = await shiftMetrics({ ...shift, closedAt: now })
-  await db.shift.update({ where: { id: shiftId }, data: { closedAt: now, closingBalance: input.closingBalance } })
+  const finals: { method: 'cash' | 'card'; amount: number }[] = []
+  if (input.finalWithdrawCash > 0) finals.push({ method: 'cash', amount: input.finalWithdrawCash })
+  if (input.finalWithdrawCard > 0) finals.push({ method: 'card', amount: input.finalWithdrawCard })
+  for (const f of finals) {
+    await db.cashMovement.create({ data: { type: 'withdrawal', method: f.method, amount: -Math.abs(f.amount), employeeId: me.id, shiftId, occurredAt: now, description: 'Retirada no fechamento' } })
+  }
+  const fresh = await db.shift.findUniqueOrThrow({ where: { id: shiftId } })
+  const metrics = await shiftMetrics(fresh)
+  await db.shift.update({ where: { id: shiftId }, data: { closedAt: now, closedById: me.id, closingBalance: metrics.saldo } })
   await logEvent({ type: 'shift.close', description: `Caixa fechado · saldo R$ ${metrics.saldo.toFixed(2)}`, entity: 'shift', entityId: String(shiftId) })
   return metrics
 }
@@ -69,7 +76,7 @@ export async function addCashMovement(input: CashMovementInput) {
   if (input.type === 'withdrawal') amount = -Math.abs(amount)
   if (input.type === 'supply') amount = Math.abs(amount)
   const mov = await db.cashMovement.create({
-    data: { type: input.type, amount, employeeId: me.id, shiftId: open.id, occurredAt: now, description: input.description },
+    data: { type: input.type, method: input.type === 'withdrawal' ? (input.method ?? null) : null, amount, employeeId: me.id, shiftId: open.id, occurredAt: now, description: input.description },
   })
   const label = input.type === 'withdrawal' ? 'Sangria' : input.type === 'supply' ? 'Suprimento' : 'Correção'
   await logEvent({ type: `cash.${input.type}`, description: `${label} R$ ${Math.abs(amount).toFixed(2)}${input.description ? ` · ${input.description}` : ''}`, entity: 'cash', entityId: String(mov.id) })
