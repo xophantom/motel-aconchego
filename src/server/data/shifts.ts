@@ -136,3 +136,22 @@ export async function listClosedShifts(limit = 30) {
   const shifts = await db.shift.findMany({ where: { closedAt: { not: null } }, orderBy: { openedAt: 'desc' }, take: limit })
   return Promise.all(shifts.map(async (s) => ({ shift: s, metrics: await shiftMetrics(s) })))
 }
+
+export type ShiftReportLine = { room: string; checkIn: Date; checkOut: Date | null; stayAmount: number; consumptionAmount: number }
+export type ShiftReport = {
+  shift: { id: string; period: string; businessDate: Date; openedAt: Date; closedAt: Date | null; openingBalance: number }
+  metrics: ShiftMetrics; closedByName: string | null; lines: ShiftReportLine[]
+}
+
+export async function shiftReport(shiftId: bigint): Promise<ShiftReport> {
+  await requireCash()
+  const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId }, include: { closedBy: true } })
+  const end = shift.closedAt ?? new Date()
+  const stays = await db.stay.findMany({ where: { status: 'closed', checkOut: { gte: shift.openedAt, lte: end } }, orderBy: { checkOut: 'asc' } })
+  const lines: ShiftReportLine[] = stays.map((s) => ({ room: s.roomNumber ?? '—', checkIn: s.checkIn, checkOut: s.checkOut, stayAmount: Number(s.stayAmount ?? 0), consumptionAmount: Number(s.consumptionAmount) }))
+  const metrics = await shiftMetrics(shift)
+  return {
+    shift: { id: String(shift.id), period: shift.period, businessDate: shift.businessDate, openedAt: shift.openedAt, closedAt: shift.closedAt, openingBalance: Number(shift.openingBalance) },
+    metrics, closedByName: shift.closedBy?.name ?? null, lines,
+  }
+}
