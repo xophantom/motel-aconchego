@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { computeStayAmount } from '@/lib/billing'
 import type { CheckInInput } from '@/lib/validation/stay'
-import { getOpenShiftFor } from '@/server/data/shifts'
+import { getOpenShiftFor, getOrOpenCurrentShift } from '@/server/data/shifts'
 import { customerByPlate } from '@/server/data/loyalty'
 import { logEvent } from '@/server/audit'
 
@@ -29,7 +29,7 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   const room = await db.room.findUniqueOrThrow({ where: { number: input.roomNumber } })
   if (room.status !== 'free') throw new Error('Room is not free')
   if (!room.categoryId) throw new Error('Room has no category')
-  const openShiftId = (await getOpenShiftFor(new Date()))?.id ?? null
+  const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   const customer = input.plate ? await customerByPlate(input.plate) : null
   const stay = await db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
@@ -92,7 +92,7 @@ export async function checkOut(roomNumber: string) {
   const discount = stay.discountPercent ?? 0
   const stayAmount = discount > 0 ? Math.round(rawStayAmount * (1 - discount / 100) * 100) / 100 : rawStayAmount
   const balance = stayAmount + Number(stay.consumptionAmount) - Number(stay.prepaidAmount)
-  const openShiftId = (await getOpenShiftFor(checkOutAt))?.id ?? null
+  const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   await db.$transaction(async (tx) => {
     await tx.stay.update({ where: { id: stay.id }, data: { checkOut: checkOutAt, stayAmount, status: 'closed', paymentEmployeeId: me.id } })
     await tx.cashMovement.create({
@@ -116,7 +116,7 @@ export async function cancelCheckIn(roomNumber: string, reason: string): Promise
   const room = await db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true } })
   if (room.status !== 'occupied' || !room.currentStay || room.currentStay.status !== 'open') throw new Error('not occupied')
   const stay = room.currentStay
-  const shiftId = (await getOpenShiftFor(new Date()))?.id ?? null
+  const shiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   const movs = await db.cashMovement.findMany({ where: { stayId: stay.id, type: 'stay' } })
   await db.$transaction(async (tx) => {
     for (const m of movs) {
@@ -137,7 +137,7 @@ export async function cancelCheckOut(roomNumber: string, reason: string): Promis
   if (room.status !== 'free' && room.status !== 'cleaning') throw new Error('room reoccupied')
   const stay = await db.stay.findFirst({ where: { roomNumber, status: 'closed', type: 'room' }, orderBy: { checkOut: 'desc' } })
   if (!stay || !stay.checkOut) throw new Error('no closed stay')
-  const shiftId = (await getOpenShiftFor(new Date()))?.id ?? null
+  const shiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   // the checkout balance movement(s): stay-type, at or after the checkout time (the prepaid was created at check-in, earlier)
   const movs = await db.cashMovement.findMany({ where: { stayId: stay.id, type: 'stay', occurredAt: { gte: stay.checkOut } } })
   await db.$transaction(async (tx) => {

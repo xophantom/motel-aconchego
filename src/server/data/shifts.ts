@@ -5,6 +5,7 @@ import { can } from '@/lib/rbac'
 import { currentPeriod, businessDateFor } from '@/lib/shift'
 import { logEvent } from '@/server/audit'
 import type { CashMovementInput } from '@/lib/validation/shift'
+import { getCashPolicy } from '@/server/data/cash-policy'
 
 async function requireCash() {
   const me = await getCurrentUser()
@@ -14,6 +15,26 @@ async function requireCash() {
 
 export function getOpenShiftFor(now: Date) {
   return db.shift.findFirst({ where: { period: currentPeriod(now), businessDate: businessDateFor(now), closedAt: null } })
+}
+
+// Resolve the current period's shift, opening it automatically (carrying the
+// previous shift's closing balance) when none is open yet.
+export async function getOrOpenCurrentShift() {
+  const me = await getCurrentUser()
+  if (!me) throw new Error('Forbidden')
+  const now = new Date()
+  const businessDate = businessDateFor(now)
+  const period = currentPeriod(now)
+  const existing = await db.shift.findUnique({ where: { businessDate_period: { businessDate, period } } })
+  if (existing && !existing.closedAt) return existing
+  if (existing && existing.closedAt) throw new Error('Caixa já fechado neste período')
+  const last = await db.shift.findFirst({ where: { closedAt: { not: null } }, orderBy: { closedAt: 'desc' } })
+  const { expectedOpeningBalance } = await getCashPolicy()
+  const openingBalance = last ? Number(last.closingBalance ?? 0) : expectedOpeningBalance
+  const expected = period === 'day_07_19' ? expectedOpeningBalance : openingBalance
+  const shift = await db.shift.create({ data: { businessDate, period, employeeId: me.id, openedAt: now, openingBalance, expectedOpeningBalance: expected } })
+  await logEvent({ type: 'shift.open', description: `Caixa aberto (auto) · saldo inicial R$ ${openingBalance.toFixed(2)}`, entity: 'shift', entityId: String(shift.id) })
+  return shift
 }
 
 export async function openShift(input: { openingBalance: number }) {
@@ -43,12 +64,12 @@ export async function addCashMovement(input: CashMovementInput) {
   const me = await requireCash()
   if (input.type === 'correction' && me.role !== 'manager') throw new Error('Forbidden')
   const now = new Date()
-  const open = await getOpenShiftFor(now)
+  const open = await getOrOpenCurrentShift()
   let amount = input.amount
   if (input.type === 'withdrawal') amount = -Math.abs(amount)
   if (input.type === 'supply') amount = Math.abs(amount)
   const mov = await db.cashMovement.create({
-    data: { type: input.type, amount, employeeId: me.id, shiftId: open?.id ?? null, occurredAt: now, description: input.description },
+    data: { type: input.type, amount, employeeId: me.id, shiftId: open.id, occurredAt: now, description: input.description },
   })
   const label = input.type === 'withdrawal' ? 'Sangria' : input.type === 'supply' ? 'Suprimento' : 'Correção'
   await logEvent({ type: `cash.${input.type}`, description: `${label} R$ ${Math.abs(amount).toFixed(2)}${input.description ? ` · ${input.description}` : ''}`, entity: 'cash', entityId: String(mov.id) })
