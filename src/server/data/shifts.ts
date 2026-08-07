@@ -79,10 +79,11 @@ export async function addCashMovement(input: CashMovementInput) {
 export type ShiftMetrics = {
   nAptos: number; totalEstadias: number; totalConsumo: number;
   totalSangrias: number; totalSuprimentos: number; totalCorrecoes: number;
+  retiradoDinheiro: number; retiradoCartao: number; total: number; openingDifference: number;
   ticketMedio: number; saldo: number;
 }
 
-type ShiftLike = { id: bigint; openedAt: Date; closedAt: Date | null; openingBalance: unknown }
+type ShiftLike = { id: bigint; openedAt: Date; closedAt: Date | null; openingBalance: unknown; expectedOpeningBalance?: unknown }
 
 export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
   const checkoutWhere = shift.closedAt
@@ -93,9 +94,11 @@ export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
   const nAptos = roomAgg._count._all
   const totalEstadias = Number(roomAgg._sum.stayAmount ?? 0)
   const totalConsumo = Number(consumoAgg._sum.consumptionAmount ?? 0)
-  const movs = await db.cashMovement.findMany({ where: { shiftId: shift.id }, select: { type: true, amount: true } })
+  const movs = await db.cashMovement.findMany({ where: { shiftId: shift.id }, select: { type: true, amount: true, method: true } })
   const sum = (t: string) => movs.filter((m) => m.type === t).reduce((a, m) => a + Number(m.amount), 0)
+  const sumMethod = (mth: string) => movs.filter((m) => m.type === 'withdrawal' && m.method === mth).reduce((a, m) => a + Math.abs(Number(m.amount)), 0)
   const round2 = (n: number) => Math.round(n * 100) / 100
+  const expected = Number(shift.expectedOpeningBalance ?? shift.openingBalance)
   const saldo = Number(shift.openingBalance) + movs.reduce((a, m) => a + Number(m.amount), 0)
   return {
     nAptos,
@@ -104,6 +107,10 @@ export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
     totalSangrias: round2(sum('withdrawal')),
     totalSuprimentos: round2(sum('supply')),
     totalCorrecoes: round2(sum('correction')),
+    retiradoDinheiro: round2(sumMethod('cash')),
+    retiradoCartao: round2(sumMethod('card')),
+    total: round2(totalEstadias + totalConsumo),
+    openingDifference: round2(Number(shift.openingBalance) - expected),
     ticketMedio: nAptos > 0 ? round2(totalEstadias / nAptos) : 0,
     saldo: round2(saldo),
   }
