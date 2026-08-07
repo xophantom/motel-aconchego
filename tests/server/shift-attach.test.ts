@@ -5,7 +5,7 @@ vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current
 
 import { db } from '@/server/db'
 import { checkIn, checkOut } from '@/server/data/stays'
-import { openShift } from '@/server/data/shifts'
+import { getOrOpenCurrentShift } from '@/server/data/shifts'
 
 beforeEach(async () => {
   await db.loyaltyRedemption.deleteMany()
@@ -19,7 +19,7 @@ beforeEach(async () => {
 })
 
 it('checkout movement is attached to the open shift', async () => {
-  const shift = await openShift({ openingBalance: 0 })
+  const shift = await getOrOpenCurrentShift()
   const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
   await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
   await checkOut('01')

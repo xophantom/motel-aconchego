@@ -37,18 +37,6 @@ export async function getOrOpenCurrentShift() {
   return shift
 }
 
-export async function openShift(input: { openingBalance: number }) {
-  const me = await requireCash()
-  const now = new Date()
-  const businessDate = businessDateFor(now)
-  const period = currentPeriod(now)
-  const existing = await db.shift.findUnique({ where: { businessDate_period: { businessDate, period } } })
-  if (existing) throw new Error(existing.closedAt ? 'Caixa já fechado neste período' : 'Caixa já aberto')
-  const shift = await db.shift.create({ data: { businessDate, period, employeeId: me.id, openedAt: now, openingBalance: input.openingBalance } })
-  await logEvent({ type: 'shift.open', description: `Caixa aberto · saldo inicial R$ ${input.openingBalance.toFixed(2)}`, entity: 'shift', entityId: String(shift.id) })
-  return shift
-}
-
 export async function closeShift(shiftId: bigint, input: CloseShiftInput): Promise<ShiftMetrics> {
   const me = await requireCash()
   const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId } })
@@ -125,10 +113,11 @@ export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
 
 export async function currentShiftSummary() {
   await requireCash()
-  const shift = await getOpenShiftFor(new Date())
-  if (!shift) return { shift: null, movements: [], metrics: null as ShiftMetrics | null }
+  let shift
+  try { shift = await getOrOpenCurrentShift() }
+  catch (e) { if (e instanceof Error && /já fechado/i.test(e.message)) return { shift: null, movements: [], metrics: null as ShiftMetrics | null, closed: true }; throw e }
   const movements = await db.cashMovement.findMany({ where: { shiftId: shift.id }, orderBy: { occurredAt: 'desc' } })
-  return { shift, movements, metrics: await shiftMetrics(shift) }
+  return { shift, movements, metrics: await shiftMetrics(shift), closed: false }
 }
 
 export async function listClosedShifts(limit = 30) {

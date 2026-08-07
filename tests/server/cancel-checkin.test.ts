@@ -5,7 +5,7 @@ vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current
 
 import { db } from '@/server/db'
 import { checkIn, cancelCheckIn } from '@/server/data/stays'
-import { openShift } from '@/server/data/shifts'
+import { getOrOpenCurrentShift } from '@/server/data/shifts'
 
 beforeEach(async () => {
   await db.eventLog.deleteMany(); await db.loyaltyRedemption.deleteMany()
@@ -16,7 +16,7 @@ beforeEach(async () => {
   await db.rate.create({ data: { categoryId: cat.id, day: 'normal', basePrice: 75, excessPrice30m: 15, overnightPrice: 160, extraGuestPrice: 25 } })
   await db.room.create({ data: { number: '01', status: 'free', categoryId: cat.id } })
   session.current = { id: 1, name: 'Boss', role: 'reception' }
-  await openShift({ openingBalance: 0 }) // shift open so reception passes the window
+  await getOrOpenCurrentShift() // shift open so reception passes the window
 })
 
 describe('cancelCheckIn', () => {
