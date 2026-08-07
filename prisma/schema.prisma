@@ -133,7 +133,8 @@ model Employee {
   staysCanceled Stay[]        @relation("canceled")
   stockMovements StockMovement[]
   movements    CashMovement[]
-  shifts       Shift[]
+  shifts       Shift[]        @relation("shiftOpened")
+  shiftsClosed Shift[]        @relation("shiftClosed")
   events       EventLog[]
   ledgerEntries LedgerEntry[]
 
@@ -214,7 +215,10 @@ model Shift {
   closedAt       DateTime?      @map("closed_at") @db.Timestamptz
   openingBalance Decimal        @default(0) @map("opening_balance") @db.Decimal(10, 2)
   closingBalance Decimal?       @map("closing_balance") @db.Decimal(10, 2)
-  employee       Employee?      @relation(fields: [employeeId], references: [id])
+  closedById     Int?           @map("closed_by_id")
+  expectedOpeningBalance Decimal? @map("expected_opening_balance") @db.Decimal(10, 2)
+  employee       Employee?      @relation("shiftOpened", fields: [employeeId], references: [id])
+  closedBy       Employee?      @relation("shiftClosed", fields: [closedById], references: [id])
   stays          Stay[]
   movements      CashMovement[]
 
@@ -280,6 +284,7 @@ model Consumption {
 model CashMovement {
   id          BigInt           @id @default(autoincrement())
   type        CashMovementType
+  method      CashMethod?      @map("method")
   stayId      BigInt?          @map("stay_id")
   amount      Decimal          @db.Decimal(10, 2)
   employeeId  Int?             @map("employee_id")
@@ -364,4 +369,16 @@ model TariffPolicy {
   id              Int   @id @default(1)
   specialWeekdays Int[] @map("special_weekdays") // 0=Dom … 6=Sáb
   @@map("tariff_policy")
+}
+
+enum CashMethod {
+  cash
+  card
+  @@map("cash_method")
+}
+
+model CashPolicy {
+  id                     Int     @id @default(1)
+  expectedOpeningBalance Decimal @default(150) @map("expected_opening_balance") @db.Decimal(10, 2)
+  @@map("cash_policy")
 }
