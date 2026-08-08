@@ -5,7 +5,7 @@ vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current
 
 import { db } from '@/server/db'
 import { addConsumption, listConsumption, removeConsumption, walkinSale } from '@/server/data/consumption'
-import { openShift, currentShiftSummary } from '@/server/data/shifts'
+import { getOrOpenCurrentShift, currentShiftSummary } from '@/server/data/shifts'
 
 let stayId: bigint
 beforeEach(async () => {
@@ -90,7 +90,7 @@ describe('audit trail', () => {
 
 describe('shiftMetrics excludes walk-ins from nAptos but includes their consumo', () => {
   it('counts a room checkout as apto and a walk-in only as consumo', async () => {
-    const s = await openShift({ openingBalance: 0 })
+    const s = await getOrOpenCurrentShift()
     const within = new Date(s.openedAt.getTime() + 60_000)
     // a room stay checked out in the window with consumption
     await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: s.openedAt, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 75, consumptionAmount: 10 } })

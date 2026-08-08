@@ -6,7 +6,7 @@ vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current
 import { db } from '@/server/db'
 import { listRoomsWithCurrentStay } from '@/server/data/rooms'
 import { canCancelNow, checkIn, checkOut } from '@/server/data/stays'
-import { openShift } from '@/server/data/shifts'
+import { getOrOpenCurrentShift } from '@/server/data/shifts'
 
 beforeEach(async () => {
   await db.eventLog.deleteMany(); await db.loyaltyRedemption.deleteMany()
@@ -21,7 +21,7 @@ beforeEach(async () => {
 
 describe('board cancel data', () => {
   it('lastClosedStayId points at the most recent closed stay of a freed room', async () => {
-    await openShift({ openingBalance: 0 })
+    await getOrOpenCurrentShift()
     const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
     await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
     await checkOut('01') // room now 'cleaning'
@@ -31,7 +31,7 @@ describe('board cancel data', () => {
   })
 
   it('lastClosedStayId is null for an occupied room and for a never-used room', async () => {
-    await openShift({ openingBalance: 0 })
+    await getOrOpenCurrentShift()
     await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
     const rooms = await listRoomsWithCurrentStay()
     expect(rooms.find((r) => r.number === '01')!.lastClosedStayId).toBeNull()
@@ -39,7 +39,7 @@ describe('board cancel data', () => {
 
   it('canCancelNow: reception needs an open shift; manager always; housekeeper never', async () => {
     expect(await canCancelNow()).toBe(false) // reception, no shift
-    await openShift({ openingBalance: 0 })
+    await getOrOpenCurrentShift()
     expect(await canCancelNow()).toBe(true)  // reception, shift open
     session.current = { id: 1, name: 'M', role: 'manager' }
     await db.shift.updateMany({ data: { closedAt: new Date() } })

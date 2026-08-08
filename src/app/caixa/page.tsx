@@ -2,32 +2,35 @@ import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { currentShiftSummary, listClosedShifts } from '@/server/data/shifts'
+import { getCashPolicy } from '@/server/data/cash-policy'
 import { getCurrentUser } from '@/server/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
-import { OpenShiftForm, CloseShiftForm, MovementForm } from './caixa-forms'
+import { CloseShiftForm, MovementForm } from './caixa-forms'
+import { CashPolicyForm } from './policy-form'
 
 const money = (n: number) => `R$ ${n.toFixed(2)}`
 const periodLabel = (p: string) => (p === 'day_07_19' ? 'Diurno (07–19)' : 'Noturno (19–07)')
-const MOVE_LABEL: Record<string, string> = { stay: 'Estadia', consumption: 'Consumo', withdrawal: 'Sangria', supply: 'Suprimento', correction: 'Correção' }
+const MOVE_LABEL: Record<string, string> = { stay: 'Estadia', consumption: 'Consumo', withdrawal: 'Retirada', supply: 'Suprimento', correction: 'Correção' }
 
 async function Caixa() {
   await connection()
   const me = await getCurrentUser()
-  let summary, closed
-  try { summary = await currentShiftSummary(); closed = await listClosedShifts(10) }
+  let summary, closed, policy
+  try { summary = await currentShiftSummary(); closed = await listClosedShifts(10); policy = await getCashPolicy() }
   catch (e) { if (e instanceof Error && /forbidden/i.test(e.message)) redirect('/'); throw e }
-  if (!summary.shift) {
+  const isManager = me?.role === 'manager'
+  if (summary.closed || !summary.shift) {
     return (
       <div className="grid gap-6">
-        <Card><CardHeader><CardTitle>Caixa fechado</CardTitle></CardHeader><CardContent><OpenShiftForm /></CardContent></Card>
+        <Card><CardHeader><CardTitle>Turno fechado</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">O turno deste período foi fechado. O próximo abre automaticamente.</p></CardContent></Card>
+        {isManager && <CashPolicyCard value={policy.expectedOpeningBalance} />}
         <ClosedHistory closed={closed} />
       </div>
     )
   }
   const m = summary.metrics!
-  const isManager = me?.role === 'manager'
   return (
     <div className="grid gap-6">
       <Card>
@@ -37,12 +40,16 @@ async function Caixa() {
             <Metric label="Nº aptos" value={String(m.nAptos)} />
             <Metric label="Ticket médio" value={money(m.ticketMedio)} />
             <Metric label="Estadias" value={money(m.totalEstadias)} />
-            <Metric label="Sangrias" value={money(m.totalSangrias)} />
-            <Metric label="Suprimentos" value={money(m.totalSuprimentos)} />
+            <Metric label="Consumo" value={money(m.totalConsumo)} />
+            <Metric label="Retirado dinheiro" value={money(m.retiradoDinheiro)} />
+            <Metric label="Retirado cartão" value={money(m.retiradoCartao)} />
             <Metric label="Saldo" value={money(m.saldo)} />
           </div>
+          {m.openingDifference !== 0 && (
+            <p className="text-sm text-destructive">⚠ Diferença de abertura: {money(m.openingDifference)} (vs. fundo esperado da manhã)</p>
+          )}
           <div className="grid gap-2 border-t pt-3">
-            <MovementForm type="withdrawal" label="Sangria" canUse />
+            <MovementForm type="withdrawal" label="Retirada" canUse />
             <MovementForm type="supply" label="Suprimento" canUse />
             <MovementForm type="correction" label="Correção" canUse={isManager} />
           </div>
@@ -58,7 +65,7 @@ async function Caixa() {
               {summary.movements.map((mv) => (
                 <TableRow key={String(mv.id)}>
                   <TableCell className="tnum text-muted-foreground">{new Date(mv.occurredAt).toLocaleTimeString('pt-BR')}</TableCell>
-                  <TableCell>{MOVE_LABEL[mv.type] ?? mv.type}</TableCell>
+                  <TableCell>{MOVE_LABEL[mv.type] ?? mv.type}{mv.method ? ` · ${mv.method === 'cash' ? 'dinheiro' : 'cartão'}` : ''}</TableCell>
                   <TableCell className="tnum font-medium">{money(Number(mv.amount))}</TableCell>
                   <TableCell className="text-muted-foreground">{mv.description ?? '—'}</TableCell>
                 </TableRow>
@@ -67,6 +74,7 @@ async function Caixa() {
           </Table>
         </CardContent>
       </Card>
+      {isManager && <CashPolicyCard value={policy.expectedOpeningBalance} />}
       <ClosedHistory closed={closed} />
     </div>
   )
@@ -78,6 +86,15 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="tnum mt-0.5 font-display text-xl font-bold">{value}</div>
     </div>
+  )
+}
+
+function CashPolicyCard({ value }: { value: number }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>Fundo de caixa</CardTitle></CardHeader>
+      <CardContent><CashPolicyForm value={value} /></CardContent>
+    </Card>
   )
 }
 
@@ -109,7 +126,7 @@ function ClosedHistory({ closed }: { closed: Awaited<ReturnType<typeof listClose
 export default function CaixaPage() {
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
-      <PageHeader title="Caixa" subtitle="Abra o turno, registre sangrias e suprimentos e feche o caixa." />
+      <PageHeader title="Caixa" subtitle="Turno automático por horário. Registre retiradas e feche o caixa." />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <Caixa />
       </Suspense>

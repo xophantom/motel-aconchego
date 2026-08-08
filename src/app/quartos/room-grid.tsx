@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
 import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
+import { CloseTurnoButton } from './close-turno'
 import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, cancelCheckInAction, cancelCheckOutAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
@@ -52,12 +53,20 @@ function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
   return base * (1 - stay.discountPercent / 100)
 }
 
-export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedReason }: { rooms: Room[]; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
+export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedReason, currentShiftId, canCash }: { rooms: Room[]; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason; currentShiftId: string | null; canCash: boolean }) {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Legend />
-        <VendaAvulsa products={products} />
+        <div className="flex flex-wrap items-center gap-2">
+          {canCash && currentShiftId && (
+            <>
+              <Button asChild variant="outline"><a href={`/caixa/turno/${currentShiftId}`}>Caixa do turno</a></Button>
+              <CloseTurnoButton shiftId={currentShiftId} />
+            </>
+          )}
+          <VendaAvulsa products={products} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} canCancel={canCancel} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />)}

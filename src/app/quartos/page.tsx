@@ -8,6 +8,8 @@ import { listConsumptionForStays } from '@/server/data/consumption'
 import { listCategoriesForBoard, getTariffPolicy } from '@/server/data/tariff'
 import { resolveDay, civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { availableTiers } from '@/server/data/loyalty'
+import { getCurrentUser } from '@/server/session'
+import { getOrOpenCurrentShift } from '@/server/data/shifts'
 import { RoomGrid } from './room-grid'
 
 async function Board() {
@@ -19,6 +21,10 @@ async function Board() {
   } catch { redirect('/login') }
   const products = await listProducts()
   const canCancel = await canCancelNow()
+  const me = await getCurrentUser()
+  const canCash = me?.role === 'manager' || me?.role === 'reception'
+  let currentShiftId: string | null = null
+  if (canCash) { try { currentShiftId = String((await getOrOpenCurrentShift()).id) } catch { currentShiftId = null } }
   const policy = await getTariffPolicy()
   const suggested = resolveDay(civilDateInSaoPaulo(new Date()), policy.specialWeekdays)
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
@@ -56,7 +62,7 @@ async function Board() {
       lastClosedStayId: r.lastClosedStayId != null ? String(r.lastClosedStayId) : null,
     }
   }))
-  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canCancel={canCancel} suggestedDay={suggested.day} suggestedReason={suggested.reason} />
+  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canCancel={canCancel} suggestedDay={suggested.day} suggestedReason={suggested.reason} currentShiftId={currentShiftId} canCash={canCash} />
 }
 
 export default function QuartosPage() {

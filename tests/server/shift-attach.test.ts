@@ -5,7 +5,7 @@ vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current
 
 import { db } from '@/server/db'
 import { checkIn, checkOut } from '@/server/data/stays'
-import { openShift } from '@/server/data/shifts'
+import { getOrOpenCurrentShift } from '@/server/data/shifts'
 
 beforeEach(async () => {
   await db.loyaltyRedemption.deleteMany()
@@ -19,7 +19,7 @@ beforeEach(async () => {
 })
 
 it('checkout movement is attached to the open shift', async () => {
-  const shift = await openShift({ openingBalance: 0 })
+  const shift = await getOrOpenCurrentShift()
   const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
   await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
   await checkOut('01')
@@ -27,8 +27,10 @@ it('checkout movement is attached to the open shift', async () => {
   expect(mov.shiftId).toBe(shift.id)
 })
 
-it('movement has null shift when no caixa is open (does not block)', async () => {
+it('movement auto-opens the current shift when none is open', async () => {
   const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 50 })
   const mov = await db.cashMovement.findFirstOrThrow({ where: { stayId: stay.id } })
-  expect(mov.shiftId).toBeNull()
+  expect(mov.shiftId).not.toBeNull()
+  const shift = await db.shift.findFirstOrThrow({ where: { closedAt: null } })
+  expect(mov.shiftId).toBe(shift.id)
 })

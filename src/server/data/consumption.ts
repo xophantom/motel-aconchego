@@ -2,7 +2,7 @@ import 'server-only'
 import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
-import { getOpenShiftFor } from '@/server/data/shifts'
+import { getOrOpenCurrentShift } from '@/server/data/shifts'
 import { logEvent } from '@/server/audit'
 
 async function requireOps() {
@@ -67,7 +67,7 @@ export async function walkinSale(input: { items: { productCode: string; qty: num
   const priceOf = (code: string) => Number(products.find((p) => p.code === code)?.price ?? 0)
   const total = input.items.reduce((a, i) => a + priceOf(i.productCode) * i.qty, 0)
   const now = new Date()
-  const openShiftId = (await getOpenShiftFor(now))?.id ?? null
+  const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   const result = await db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
       data: { type: 'walkin', roomNumber: '99', checkIn: now, checkOut: now, status: 'closed', stayAmount: 0, consumptionAmount: total, paymentEmployeeId: me.id },
