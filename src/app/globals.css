@@ -165,26 +165,27 @@
   background-attachment: fixed;
 }
 
-/* ── Legado · Windows/VB6 clássico (cinza 3D, chapado, alto contraste) ─── */
+/* ── Legado · Windows/VB6 clássico sobre desktop preto (chapado, contraste) ─ */
 .legacy {
-  --background: #d4d0c8;
-  --foreground: #000000;
+  color-scheme: dark;
+  --background: #000000;
+  --foreground: #ffffff;
   --card: #ffffff;
   --card-foreground: #000000;
   --popover: #ffffff;
   --popover-foreground: #000000;
-  --primary: #000080;
-  --primary-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #000000;
   --secondary: #d4d0c8;
   --secondary-foreground: #000000;
   --muted: #ece9d8;
-  --muted-foreground: #404040;
-  --accent: #000080;
-  --accent-foreground: #ffffff;
-  --destructive: #a80000;
+  --muted-foreground: #c0c0c0;
+  --accent: #ffffff;
+  --accent-foreground: #000000;
+  --destructive: #e04040;
   --border: #808080;
   --input: #ffffff;
-  --ring: #000080;
+  --ring: #ffffff;
   --radius: 0rem;
   --chart-1: #000080;
   --chart-2: #808000;
@@ -197,14 +198,52 @@
   --room-cleaning: #808000;
   --room-maintenance: #606060;
 
-  --sidebar: #d4d0c8;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #000080;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ece9d8;
-  --sidebar-accent-foreground: #000000;
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #303030;
+  --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #808080;
-  --sidebar-ring: #000080;
+  --sidebar-ring: #ffffff;
+}
+
+/* Ilhas claras (cards, diálogos, tabelas, campos, superfícies cinza) voltam ao
+   texto escuro: as utilitárias resolvem as variáveis no ponto de uso, então
+   basta redefini-las no ancestral e tudo que está dentro herda. */
+.legacy [class~="bg-card"],
+.legacy [class~="bg-popover"],
+.legacy [class~="bg-muted"],
+.legacy [class~="bg-muted/50"],
+.legacy [class~="bg-secondary"],
+.legacy table,
+.legacy input,
+.legacy textarea,
+.legacy select {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #000000;
+  --muted-foreground: #404040;
+  --primary: #000000;
+  --primary-foreground: #ffffff;
+  --accent: #000000;
+  --accent-foreground: #ffffff;
+  --destructive: #a80000;
+  --ring: #000000;
+}
+
+/* O texto herdado também precisa voltar ao preto dentro dessas ilhas — em
+   :where() para especificidade zero, senão atropelaria as utilitárias text-*. */
+.legacy :where([class~="bg-card"],
+  [class~="bg-popover"],
+  [class~="bg-muted"],
+  [class~="bg-muted/50"],
+  [class~="bg-secondary"],
+  table,
+  input,
+  textarea,
+  select) {
+  color: #000000;
 }
 
 /* Fonte de sistema, sem display font, sem tracking negativo */
@@ -241,6 +280,15 @@
   border-bottom-color: #ffffff !important;
 }
 
+/* Botões "outline" usam bg-background, que agora é preto: sobre a página eles
+   sumiriam no fundo e dentro das ilhas claras ficariam preto sobre preto.
+   Aqui viram o botão cinza clássico, igual em qualquer superfície. */
+.legacy button[class~="bg-background"] {
+  background-color: #d4d0c8 !important;
+  color: #000000 !important;
+}
+.legacy button[class~="bg-background"]:hover { background-color: #e6e3dc !important; }
+
 /* Campos afundados (sunken): inputs, textarea, selects */
 .legacy input, .legacy textarea, .legacy select {
   border-style: solid !important;
@@ -266,11 +314,20 @@
 .legacy th, .legacy td { border: 1px solid #808080 !important; }
 .legacy thead, .legacy th { background-color: #d4d0c8 !important; }
 
-/* Foco pontilhado clássico */
-.legacy :focus-visible { outline: 1px dotted #000000 !important; outline-offset: -3px; }
+/* Foco pontilhado clássico — currentColor funciona no preto e nas ilhas claras */
+.legacy :focus-visible { outline: 1px dotted currentColor !important; outline-offset: -3px; }
 
-/* Header como barra de título azul */
-.legacy header { background: #000080 !important; border-bottom-color: #000040 !important; }
+/* Header como barra de título preta, separada do fundo por uma linha cinza */
+.legacy header {
+  background: #000000 !important;
+  border-bottom: 1px solid #808080 !important;
+  --muted: #303030;
+  --muted-foreground: #c0c0c0;
+  --secondary: #303030;
+  --secondary-foreground: #ffffff;
+  --accent: #303030;
+  --accent-foreground: #ffffff;
+}
 .legacy header a, .legacy header span, .legacy header button { color: #ffffff !important; }
 
 /* ---- Thermal ticket (80mm) ---- */
