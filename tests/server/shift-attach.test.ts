@@ -27,6 +27,15 @@ it('checkout movement is attached to the open shift', async () => {
   expect(mov.shiftId).toBe(shift.id)
 })
 
+it('checkout tags the stay with the shift it was closed in', async () => {
+  const shift = await getOrOpenCurrentShift()
+  const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+  await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000) } })
+  await checkOut('01')
+  const closed = await db.stay.findUniqueOrThrow({ where: { id: stay.id } })
+  expect(closed.shiftId).toBe(shift.id)
+})
+
 it('movement auto-opens the current shift when none is open', async () => {
   const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 50 })
   const mov = await db.cashMovement.findFirstOrThrow({ where: { stayId: stay.id } })

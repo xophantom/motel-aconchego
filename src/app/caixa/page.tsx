@@ -53,7 +53,7 @@ async function Caixa() {
             <MovementForm type="supply" label="Suprimento" canUse />
             <MovementForm type="correction" label="Correção" canUse={isManager} />
           </div>
-          <div className="border-t pt-3"><CloseShiftForm shiftId={String(summary.shift.id)} /></div>
+          <div className="border-t pt-3"><CloseShiftForm shiftId={String(summary.shift.id)} saldo={m.saldo} /></div>
         </CardContent>
       </Card>
       <Card>
@@ -109,7 +109,7 @@ function ClosedHistory({ closed }: { closed: Awaited<ReturnType<typeof listClose
           <TableBody>
             {closed.map(({ shift, metrics }) => (
               <TableRow key={String(shift.id)}>
-                <TableCell>{new Date(shift.businessDate).toLocaleDateString('pt-BR')}</TableCell>
+                <TableCell>{new Date(shift.businessDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</TableCell>
                 <TableCell>{periodLabel(shift.period)}</TableCell>
                 <TableCell>{metrics.nAptos}</TableCell>
                 <TableCell>{money(metrics.totalEstadias)}</TableCell>

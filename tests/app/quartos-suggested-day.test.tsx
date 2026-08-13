@@ -30,4 +30,14 @@ describe('FreeActions suggested tariff', () => {
     expect(html).toMatch(/value="normal"[^>]*selected|selected[^>]*value="normal"/)
     expect(html).toContain('dia de semana')
   })
+
+  it('shows the room price for the suggested table (período + pernoite)', () => {
+    const withTariff = { ...room, tariff: { normal: { base: 75, overnight: 160 }, special: { base: 90, overnight: 200 } } }
+    const html = renderToStaticMarkup(
+      <FreeActions room={withTariff as any} onDone={() => {}} suggestedDay="normal" suggestedReason="weekday" />,
+    )
+    expect(html).toContain('Valor do quarto')
+    expect(html).toContain('R$ 75.00')
+    expect(html).toContain('R$ 160.00')
+  })
 })

@@ -4,13 +4,14 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { getOrOpenCurrentShift, closeShift, addCashMovement, currentShiftSummary, getOpenShiftFor } from '@/server/data/shifts'
+import { getOrOpenCurrentShift, closeShift, addCashMovement, currentShiftSummary, getOpenShiftFor, shiftReport } from '@/server/data/shifts'
+import { hashPassword } from '@/server/password'
 
 beforeEach(async () => {
   await db.eventLog.deleteMany()
   await db.loyaltyRedemption.deleteMany()
   await db.cashMovement.deleteMany(); await db.stay.deleteMany(); await db.shift.deleteMany(); await db.employee.deleteMany()
-  await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: 'x' } })
+  await db.employee.create({ data: { id: 1, name: 'Boss', username: 'boss', role: 'reception', passwordHash: await hashPassword('boss123') } })
   session.current = { id: 1, name: 'Boss', role: 'reception' }
 })
 
@@ -32,20 +33,21 @@ describe('shifts DAL', () => {
     expect(Number(c.amount)).toBe(-10)
   })
 
-  it('computes metrics: nAptos by checkout window, totals, ticket médio, saldo', async () => {
+  it('computes metrics by shiftId: nAptos, totals, ticket médio, saldo', async () => {
     const s = await getOrOpenCurrentShift() // opening 150 (no prior shift, default fundo)
-    const within = new Date(s.openedAt.getTime() + 60_000)
-    const before = new Date(s.openedAt.getTime() - 60_000)
-    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 75 } })
-    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 85 } })
-    await db.stay.create({ data: { type: 'room', checkIn: before, checkOut: before, status: 'closed', day: 'normal', guests: 2, stayAmount: 999 } })
-    await db.cashMovement.create({ data: { type: 'stay', amount: 75, employeeId: 1, shiftId: s.id, occurredAt: within } })
-    await db.cashMovement.create({ data: { type: 'stay', amount: 85, employeeId: 1, shiftId: s.id, occurredAt: within } })
+    const t = new Date()
+    // two stays closed in THIS shift, one closed under another shift (must be ignored)
+    await db.stay.create({ data: { type: 'room', checkIn: t, checkOut: t, status: 'closed', day: 'normal', guests: 2, stayAmount: 75, consumptionAmount: 10, shiftId: s.id } })
+    await db.stay.create({ data: { type: 'room', checkIn: t, checkOut: t, status: 'closed', day: 'normal', guests: 2, stayAmount: 85, consumptionAmount: 0, shiftId: s.id } })
+    await db.stay.create({ data: { type: 'room', checkIn: t, checkOut: t, status: 'closed', day: 'normal', guests: 2, stayAmount: 999, consumptionAmount: 500, shiftId: null } })
+    await db.cashMovement.create({ data: { type: 'stay', amount: 75, employeeId: 1, shiftId: s.id, occurredAt: t } })
+    await db.cashMovement.create({ data: { type: 'stay', amount: 85, employeeId: 1, shiftId: s.id, occurredAt: t } })
     await addCashMovement({ type: 'withdrawal', amount: 50, method: 'cash' })
 
     const { metrics } = await currentShiftSummary()
     expect(metrics!.nAptos).toBe(2)
     expect(metrics!.totalEstadias).toBe(160)
+    expect(metrics!.totalConsumo).toBe(10)
     expect(metrics!.totalSangrias).toBe(-50)
     expect(metrics!.retiradoDinheiro).toBe(50)
     expect(metrics!.ticketMedio).toBe(80)
@@ -54,9 +56,25 @@ describe('shifts DAL', () => {
 
   it('closeShift closes and forbids reopening the period', async () => {
     const s = await getOrOpenCurrentShift()
-    await closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0 })
+    await closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'boss123' })
     expect((await getOpenShiftFor(new Date()))).toBeNull()
     await expect(getOrOpenCurrentShift()).rejects.toThrow(/já fechado/i)
+  })
+
+  it('closeShift rejects a wrong operator password and leaves the shift open', async () => {
+    const s = await getOrOpenCurrentShift()
+    await expect(closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'wrong' })).rejects.toThrow(/senha/i)
+    expect(await getOpenShiftFor(new Date())).not.toBeNull()
+  })
+
+  it('shiftReport lists only the stays closed in that shift', async () => {
+    const s = await getOrOpenCurrentShift()
+    const t = new Date()
+    await db.stay.create({ data: { type: 'room', checkIn: t, checkOut: t, status: 'closed', day: 'normal', guests: 2, stayAmount: 120, consumptionAmount: 0, shiftId: s.id } })
+    await db.stay.create({ data: { type: 'room', checkIn: t, checkOut: t, status: 'closed', day: 'normal', guests: 2, stayAmount: 999, consumptionAmount: 0, shiftId: null } })
+    const rep = await shiftReport(s.id)
+    expect(rep.lines).toHaveLength(1)
+    expect(rep.lines[0].stayAmount).toBe(120)
   })
 })
 
@@ -78,7 +96,7 @@ describe('audit trail', () => {
 
   it('closeShift writes shift.close', async () => {
     const shift = await getOrOpenCurrentShift()
-    await closeShift(shift.id, { finalWithdrawCash: 0, finalWithdrawCard: 0 })
+    await closeShift(shift.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'boss123' })
     const ev = await db.eventLog.findMany({ where: { type: 'shift.close' } })
     expect(ev).toHaveLength(1)
     expect(ev[0].entityId).toBe(String(shift.id))

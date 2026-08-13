@@ -13,7 +13,7 @@ beforeEach(async () => {
 describe('shiftReport', () => {
   it('lists closed stays in the window and summarizes', async () => {
     const shift = await db.shift.create({ data: { businessDate: new Date('2020-03-01'), period: 'day_07_19', employeeId: 1, openedAt: new Date('2020-03-01T07:00:00'), openingBalance: 150, expectedOpeningBalance: 150 } })
-    await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: new Date('2020-03-01T09:00:00'), checkOut: new Date('2020-03-01T11:00:00'), status: 'closed', stayAmount: 75, consumptionAmount: 20 } })
+    await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: new Date('2020-03-01T09:00:00'), checkOut: new Date('2020-03-01T11:00:00'), status: 'closed', stayAmount: 75, consumptionAmount: 20, shiftId: shift.id } })
     const rep = await shiftReport(shift.id)
     expect(rep.lines).toHaveLength(1)
     expect(rep.lines[0]).toMatchObject({ room: '01', stayAmount: 75, consumptionAmount: 20 })

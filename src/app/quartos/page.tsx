@@ -9,7 +9,7 @@ import { listCategoriesForBoard, getTariffPolicy } from '@/server/data/tariff'
 import { resolveDay, civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { availableTiers } from '@/server/data/loyalty'
 import { getCurrentUser } from '@/server/session'
-import { getOrOpenCurrentShift } from '@/server/data/shifts'
+import { currentShiftSummary } from '@/server/data/shifts'
 import { RoomGrid } from './room-grid'
 
 async function Board() {
@@ -24,7 +24,16 @@ async function Board() {
   const me = await getCurrentUser()
   const canCash = me?.role === 'manager' || me?.role === 'reception'
   let currentShiftId: string | null = null
-  if (canCash) { try { currentShiftId = String((await getOrOpenCurrentShift()).id) } catch { currentShiftId = null } }
+  let shiftSaldo = 0, retiradoDinheiro = 0, retiradoCartao = 0
+  if (canCash) {
+    try {
+      const sum = await currentShiftSummary()
+      if (!sum.closed && sum.shift && sum.metrics) {
+        currentShiftId = String(sum.shift.id)
+        shiftSaldo = sum.metrics.saldo; retiradoDinheiro = sum.metrics.retiradoDinheiro; retiradoCartao = sum.metrics.retiradoCartao
+      }
+    } catch { currentShiftId = null }
+  }
   const policy = await getTariffPolicy()
   const suggested = resolveDay(civilDateInSaoPaulo(new Date()), policy.specialWeekdays)
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
@@ -37,6 +46,17 @@ async function Board() {
     byStay.set(key, arr)
   }
   const catById = new Map(cats.map((c) => [c.id, c]))
+  const catByCode = new Map(cats.map((c) => [c.code, c]))
+  const tariffOf = (code: string | undefined) => {
+    const cat = code ? catByCode.get(code) : undefined
+    if (!cat) return null
+    const rateOf = (day: 'normal' | 'special') => cat.rates.find((rr) => rr.day === day)
+    const n = rateOf('normal'), sp = rateOf('special')
+    return {
+      normal: { base: n?.basePrice ?? 0, overnight: n?.overnightPrice ?? 0 },
+      special: { base: sp?.basePrice ?? 0, overnight: sp?.overnightPrice ?? 0 },
+    }
+  }
   const data = await Promise.all(rooms.map(async (r) => {
     const s = r.currentStay
     let pricing = null
@@ -57,12 +77,13 @@ async function Board() {
       category: r.category ? { code: r.category.code, description: r.category.description } : null,
       currentStay: s ? { id: String(s.id), checkIn: s.checkIn.toISOString(), guests: s.guests, day: s.day, chargeMode: s.chargeMode, prepaid: Number(s.prepaidAmount), consumptionAmount: Number(s.consumptionAmount), discountPercent: s.discountPercent } : null,
       pricing,
+      tariff: tariffOf(r.category?.code),
       consumption: s ? (byStay.get(String(s.id)) ?? []) : [],
       loyalty,
       lastClosedStayId: r.lastClosedStayId != null ? String(r.lastClosedStayId) : null,
     }
   }))
-  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canCancel={canCancel} suggestedDay={suggested.day} suggestedReason={suggested.reason} currentShiftId={currentShiftId} canCash={canCash} />
+  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canCancel={canCancel} suggestedDay={suggested.day} suggestedReason={suggested.reason} currentShiftId={currentShiftId} canCash={canCash} shiftSaldo={shiftSaldo} retiradoDinheiro={retiradoDinheiro} retiradoCartao={retiradoCartao} />
 }
 
 export default function QuartosPage() {
