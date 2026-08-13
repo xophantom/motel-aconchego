@@ -68,6 +68,7 @@ export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedRe
               <CloseTurnoButton shiftId={currentShiftId} saldo={shiftSaldo} retiradoDinheiro={retiradoDinheiro} retiradoCartao={retiradoCartao} />
             </>
           )}
+          <Button asChild variant="outline"><a href="/quartos/status?auto=1" target="_blank" rel="noopener">Imprimir status</a></Button>
           <VendaAvulsa products={products} />
         </div>
       </div>

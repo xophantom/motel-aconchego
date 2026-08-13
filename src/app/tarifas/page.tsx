@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
-import { listCategoriesWithRates, getTariffPolicy } from '@/server/data/tariff'
+import { listCategoriesWithRates, getTariffPolicy, listRegionalHolidays } from '@/server/data/tariff'
 import { nationalHolidayList } from '@/lib/holidays'
 import { civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/page-header'
 import { RateForm } from './rate-form'
 import { CategoryForm } from './category-form'
 import { TariffPolicyForm } from './policy-form'
+import { RegionalHolidaysForm } from './regional-holidays-form'
 
 const BILLING_LABEL: Record<string, string> = { motel: 'Motel (por tempo)', hotel: 'Hotel (diária)' }
 
@@ -17,6 +18,7 @@ async function TariffList() {
   let cats
   try { cats = await listCategoriesWithRates() } catch { redirect('/') }
   const policy = await getTariffPolicy()
+  const regional = await listRegionalHolidays()
   const year = civilDateInSaoPaulo(new Date()).year
   const holidays = nationalHolidayList(year)
   return (
@@ -25,6 +27,12 @@ async function TariffList() {
         <CardHeader><CardTitle className="font-display">Política de dia especial</CardTitle></CardHeader>
         <CardContent>
           <TariffPolicyForm specialWeekdays={policy.specialWeekdays} year={year} holidays={holidays} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle className="font-display">Feriados regionais</CardTitle></CardHeader>
+        <CardContent>
+          <RegionalHolidaysForm holidays={regional} />
         </CardContent>
       </Card>
       {cats.map((c) => (

@@ -5,7 +5,7 @@ import { listRoomsWithCurrentStay } from '@/server/data/rooms'
 import { canCancelNow } from '@/server/data/stays'
 import { listProducts } from '@/server/data/products'
 import { listConsumptionForStays } from '@/server/data/consumption'
-import { listCategoriesForBoard, getTariffPolicy } from '@/server/data/tariff'
+import { listCategoriesForBoard, getTariffPolicy, listRegionalHolidays } from '@/server/data/tariff'
 import { resolveDay, civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { availableTiers } from '@/server/data/loyalty'
 import { getCurrentUser } from '@/server/session'
@@ -35,7 +35,8 @@ async function Board() {
     } catch { currentShiftId = null }
   }
   const policy = await getTariffPolicy()
-  const suggested = resolveDay(civilDateInSaoPaulo(new Date()), policy.specialWeekdays)
+  const regional = await listRegionalHolidays()
+  const suggested = resolveDay(civilDateInSaoPaulo(new Date()), policy.specialWeekdays, regional.map((h) => h.monthDay))
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
   const allCons = await listConsumptionForStays(openStayIds)
   const byStay = new Map<string, { id: string; description: string; qty: number; unitPrice: number }[]>()

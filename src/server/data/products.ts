@@ -11,6 +11,18 @@ export async function listProducts() {
   return db.product.findMany({ orderBy: { description: 'asc' } })
 }
 
+// Tracked products at or below their minimum — the restock list ("baixo").
+export async function lowStockProducts() {
+  const me = await getCurrentUser()
+  if (!me) throw new Error('Forbidden')
+  const rows = await db.product.findMany({
+    where: { trackStock: true },
+    orderBy: { description: 'asc' },
+    select: { code: true, description: true, category: true, stockQty: true, minStock: true },
+  })
+  return rows.filter((p) => p.stockQty <= p.minStock)
+}
+
 export async function upsertProduct(input: ProductInput) {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'product:manage')) throw new Error('Forbidden')
