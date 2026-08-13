@@ -5,7 +5,7 @@ import { CloseTurnoButton } from '@/app/quartos/close-turno'
 
 describe('CloseTurnoButton', () => {
   it('renders the trigger', () => {
-    const html = renderToStaticMarkup(<CloseTurnoButton shiftId="7" />)
+    const html = renderToStaticMarkup(<CloseTurnoButton shiftId="7" saldo={310} retiradoDinheiro={0} retiradoCartao={0} />)
     expect(html).toContain('Fechar turno')
   })
 })

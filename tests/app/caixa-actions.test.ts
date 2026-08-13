@@ -19,9 +19,14 @@ describe('caixa actions', () => {
     expect(addCashMovement).not.toHaveBeenCalled()
     expect(out.ok).toBe(false)
   })
-  it('closes with final withdrawals', async () => {
-    const out = await closeShiftAction('7', { ok: false }, fd({ finalWithdrawCash: '50', finalWithdrawCard: '0' }))
-    expect(closeShift).toHaveBeenCalledWith(7n, { finalWithdrawCash: 50, finalWithdrawCard: 0 })
+  it('closes with final withdrawals and the operator password', async () => {
+    const out = await closeShiftAction('7', { ok: false }, fd({ finalWithdrawCash: '50', finalWithdrawCard: '0', password: 'senha1' }))
+    expect(closeShift).toHaveBeenCalledWith(7n, { finalWithdrawCash: 50, finalWithdrawCard: 0, password: 'senha1' })
     expect(out).toEqual({ ok: true })
+  })
+  it('refuses to close without a password', async () => {
+    const out = await closeShiftAction('7', { ok: false }, fd({ finalWithdrawCash: '50', finalWithdrawCard: '0' }))
+    expect(closeShift).not.toHaveBeenCalled()
+    expect(out.ok).toBe(false)
   })
 })

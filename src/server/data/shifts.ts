@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { currentPeriod, businessDateFor } from '@/lib/shift'
 import { logEvent } from '@/server/audit'
+import { verifyPassword } from '@/server/password'
 import type { CashMovementInput, CloseShiftInput } from '@/lib/validation/shift'
 import { getCashPolicy } from '@/server/data/cash-policy'
 
@@ -39,6 +40,8 @@ export async function getOrOpenCurrentShift() {
 
 export async function closeShift(shiftId: bigint, input: CloseShiftInput): Promise<ShiftMetrics> {
   const me = await requireCash()
+  const emp = await db.employee.findUniqueOrThrow({ where: { id: me.id } })
+  if (!(await verifyPassword(input.password, emp.passwordHash))) throw new Error('Senha incorreta')
   const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId } })
   if (shift.closedAt) throw new Error('Caixa já fechado')
   const now = new Date()
@@ -81,11 +84,12 @@ export type ShiftMetrics = {
 type ShiftLike = { id: bigint; openedAt: Date; closedAt: Date | null; openingBalance: unknown; expectedOpeningBalance?: unknown }
 
 export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
-  const checkoutWhere = shift.closedAt
-    ? { status: 'closed' as const, checkOut: { gte: shift.openedAt, lte: shift.closedAt } }
-    : { status: 'closed' as const, checkOut: { gte: shift.openedAt } }
-  const roomAgg = await db.stay.aggregate({ where: { ...checkoutWhere, type: 'room' }, _count: { _all: true }, _sum: { stayAmount: true } })
-  const consumoAgg = await db.stay.aggregate({ where: checkoutWhere, _sum: { consumptionAmount: true } })
+  // Stays are attributed to the shift they were closed in (stay.shiftId, set at
+  // checkout), consistent with how cash movements are attributed. This avoids the
+  // time-window overlap of unbounded open shifts.
+  const stayWhere = { status: 'closed' as const, shiftId: shift.id }
+  const roomAgg = await db.stay.aggregate({ where: { ...stayWhere, type: 'room' }, _count: { _all: true }, _sum: { stayAmount: true } })
+  const consumoAgg = await db.stay.aggregate({ where: stayWhere, _sum: { consumptionAmount: true } })
   const nAptos = roomAgg._count._all
   const totalEstadias = Number(roomAgg._sum.stayAmount ?? 0)
   const totalConsumo = Number(consumoAgg._sum.consumptionAmount ?? 0)
@@ -135,8 +139,7 @@ export type ShiftReport = {
 export async function shiftReport(shiftId: bigint): Promise<ShiftReport> {
   await requireCash()
   const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId }, include: { closedBy: true } })
-  const end = shift.closedAt ?? new Date()
-  const stays = await db.stay.findMany({ where: { status: 'closed', checkOut: { gte: shift.openedAt, lte: end } }, orderBy: { checkOut: 'asc' } })
+  const stays = await db.stay.findMany({ where: { status: 'closed', shiftId }, orderBy: { checkOut: 'asc' } })
   const lines: ShiftReportLine[] = stays.map((s) => ({ room: s.roomNumber ?? '—', checkIn: s.checkIn, checkOut: s.checkOut, stayAmount: Number(s.stayAmount ?? 0), consumptionAmount: Number(s.consumptionAmount) }))
   const metrics = await shiftMetrics(shift)
   return {

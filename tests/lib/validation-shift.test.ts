@@ -11,7 +11,10 @@ describe('cashMovementSchema', () => {
   })
 })
 describe('closeShiftSchema', () => {
-  it('defaults final withdrawals to 0', () => {
-    expect(closeShiftSchema.parse({})).toEqual({ finalWithdrawCash: 0, finalWithdrawCard: 0 })
+  it('defaults final withdrawals to 0 when a password is given', () => {
+    expect(closeShiftSchema.parse({ password: 'x' })).toEqual({ finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'x' })
+  })
+  it('requires a password', () => {
+    expect(closeShiftSchema.safeParse({}).success).toBe(false)
   })
 })

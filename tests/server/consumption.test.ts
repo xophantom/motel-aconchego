@@ -55,6 +55,9 @@ describe('walk-in sale', () => {
     const mov = await db.cashMovement.findFirstOrThrow({ where: { stayId: stay.id } })
     expect(mov.type).toBe('consumption')
     expect(Number(mov.amount)).toBe(20)
+    // the walk-in stay is attributed to the shift so its consumo shows in metrics
+    const shift = await db.shift.findFirstOrThrow({ where: { closedAt: null } })
+    expect(stay.shiftId).toBe(shift.id)
   })
   it('rejects an empty sale', async () => {
     await expect(walkinSale({ items: [] })).rejects.toThrow(/empty/i)
@@ -92,10 +95,10 @@ describe('shiftMetrics excludes walk-ins from nAptos but includes their consumo'
   it('counts a room checkout as apto and a walk-in only as consumo', async () => {
     const s = await getOrOpenCurrentShift()
     const within = new Date(s.openedAt.getTime() + 60_000)
-    // a room stay checked out in the window with consumption
-    await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: s.openedAt, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 75, consumptionAmount: 10 } })
-    // a walk-in closed in the window
-    await db.stay.create({ data: { type: 'walkin', roomNumber: '99', checkIn: within, checkOut: within, status: 'closed', stayAmount: 0, consumptionAmount: 20 } })
+    // a room stay closed in THIS shift with consumption
+    await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: s.openedAt, checkOut: within, status: 'closed', day: 'normal', guests: 2, stayAmount: 75, consumptionAmount: 10, shiftId: s.id } })
+    // a walk-in closed in THIS shift
+    await db.stay.create({ data: { type: 'walkin', roomNumber: '99', checkIn: within, checkOut: within, status: 'closed', stayAmount: 0, consumptionAmount: 20, shiftId: s.id } })
     const { metrics } = await currentShiftSummary()
     expect(metrics!.nAptos).toBe(1)               // only the room stay
     expect(metrics!.totalEstadias).toBe(75)

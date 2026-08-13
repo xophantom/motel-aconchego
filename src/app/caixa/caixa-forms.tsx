@@ -35,16 +35,18 @@ export function MovementForm({ type, label, canUse }: { type: 'withdrawal' | 'su
   )
 }
 
-// Fechar turno: retirada final dinheiro/cartão → fecha e vai pro relatório (auto-print).
-export function CloseShiftForm({ shiftId }: { shiftId: string }) {
+// Fechar turno: retirada final dinheiro/cartão + senha → fecha, imprime e desloga.
+export function CloseShiftForm({ shiftId, saldo }: { shiftId: string; saldo: number }) {
   const action = closeShiftAction.bind(null, shiftId)
   const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
-  useEffect(() => { if (state.ok) window.location.href = `/caixa/turno/${shiftId}?auto=1` }, [state.ok, shiftId])
+  useEffect(() => { if (state.ok) window.location.href = `/caixa/turno/${shiftId}?auto=1&logout=1` }, [state.ok, shiftId])
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
+      <div className="grid gap-1"><span className="text-xs uppercase tracking-wide text-muted-foreground">Saldo atual</span><span className="tnum font-display text-lg font-bold">R$ {saldo.toFixed(2)}</span></div>
       <div className="grid gap-1"><Label htmlFor="finalWithdrawCash">Retirada dinheiro</Label><Input id="finalWithdrawCash" name="finalWithdrawCash" type="number" step="0.01" defaultValue="0" className="w-28" /></div>
       <div className="grid gap-1"><Label htmlFor="finalWithdrawCard">Retirada cartão</Label><Input id="finalWithdrawCard" name="finalWithdrawCard" type="number" step="0.01" defaultValue="0" className="w-28" /></div>
-      <Submit>Fechar turno (imprime)</Submit>
+      <div className="grid gap-1"><Label htmlFor="closePassword">Sua senha</Label><Input id="closePassword" name="password" type="password" autoComplete="current-password" className="w-40" /></div>
+      <Submit>Fechar e sair (imprime)</Submit>
       {state.error && <span className="text-destructive text-sm">{state.error}</span>}
     </form>
   )

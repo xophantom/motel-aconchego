@@ -94,7 +94,7 @@ export async function checkOut(roomNumber: string) {
   const balance = stayAmount + Number(stay.consumptionAmount) - Number(stay.prepaidAmount)
   const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   await db.$transaction(async (tx) => {
-    await tx.stay.update({ where: { id: stay.id }, data: { checkOut: checkOutAt, stayAmount, status: 'closed', paymentEmployeeId: me.id } })
+    await tx.stay.update({ where: { id: stay.id }, data: { checkOut: checkOutAt, stayAmount, status: 'closed', paymentEmployeeId: me.id, shiftId: openShiftId } })
     await tx.cashMovement.create({
       data: { type: 'stay', stayId: stay.id, amount: balance, employeeId: me.id, shiftId: openShiftId, occurredAt: checkOutAt, description: `Saída quarto ${roomNumber}` },
     })

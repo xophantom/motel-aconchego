@@ -11,13 +11,14 @@ function mapErr(e: unknown): string {
     if (/forbidden/i.test(e.message)) return 'Sem permissão.'
     if (/já aberto/i.test(e.message)) return 'Caixa já está aberto.'
     if (/já fechado/i.test(e.message)) return 'Caixa já fechado neste período.'
+    if (/senha/i.test(e.message)) return 'Senha incorreta.'
   }
   return 'Erro ao processar.'
 }
 
 export async function closeShiftAction(shiftId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
-  const parsed = closeShiftSchema.safeParse({ finalWithdrawCash: fd.get('finalWithdrawCash') ?? 0, finalWithdrawCard: fd.get('finalWithdrawCard') ?? 0 })
-  if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
+  const parsed = closeShiftSchema.safeParse({ finalWithdrawCash: fd.get('finalWithdrawCash') ?? 0, finalWithdrawCard: fd.get('finalWithdrawCard') ?? 0, password: fd.get('password') ?? '' })
+  if (!parsed.success) return { ok: false, error: 'Informe a senha para fechar.' }
   try { await shifts.closeShift(BigInt(shiftId), parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/caixa'); revalidatePath('/quartos')
   return { ok: true }

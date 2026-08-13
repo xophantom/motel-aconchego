@@ -16,6 +16,8 @@ import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionActio
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
 type Pricing = { billing: 'motel' | 'hotel'; minPeriodMin: number; maxPeriodMin: number; includedGuests: number; basePrice: number; excessPrice30m: number; overnightPrice: number; extraGuestPrice: number }
+type DayTariff = { base: number; overnight: number }
+type Tariff = { normal: DayTariff; special: DayTariff }
 type Stay = { id: string; checkIn: string; guests: number; day: 'normal' | 'special'; chargeMode: 'period' | 'overnight'; prepaid: number; consumptionAmount: number; discountPercent: number }
 type Loyalty = { plate: string; visits: number; tiers: { id: number; minVisits: number; discountPercent: number }[]; appliedDiscount: number }
 type Room = {
@@ -25,6 +27,7 @@ type Room = {
   category: { code: string; description: string } | null
   currentStay: Stay | null
   pricing: Pricing | null
+  tariff: Tariff | null
   consumption: ConsItem[]
   loyalty: Loyalty | null
   lastClosedStayId: string | null
@@ -53,7 +56,7 @@ function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
   return base * (1 - stay.discountPercent / 100)
 }
 
-export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedReason, currentShiftId, canCash }: { rooms: Room[]; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason; currentShiftId: string | null; canCash: boolean }) {
+export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedReason, currentShiftId, canCash, shiftSaldo, retiradoDinheiro, retiradoCartao }: { rooms: Room[]; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason; currentShiftId: string | null; canCash: boolean; shiftSaldo: number; retiradoDinheiro: number; retiradoCartao: number }) {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -62,7 +65,7 @@ export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedRe
           {canCash && currentShiftId && (
             <>
               <Button asChild variant="outline"><a href={`/caixa/turno/${currentShiftId}`}>Caixa do turno</a></Button>
-              <CloseTurnoButton shiftId={currentShiftId} />
+              <CloseTurnoButton shiftId={currentShiftId} saldo={shiftSaldo} retiradoDinheiro={retiradoDinheiro} retiradoCartao={retiradoCartao} />
             </>
           )}
           <VendaAvulsa products={products} />
@@ -95,8 +98,18 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
   const now = useNow(!!occupied)
   let total: number | null = null
   if (occupied && room.pricing && room.currentStay) total = estimateStay(room.currentStay, room.pricing, now) + room.currentStay.consumptionAmount
+  // While the dialog is open, freeze the room snapshot it renders (status +
+  // currentStay). Otherwise a revalidation that flips the room mid-action
+  // (free→occupied on check-in, occupied→cleaning on checkout) swaps the panel
+  // out and unmounts its onDone/print effect, leaving the modal stuck open on
+  // the next step. Consumption/pricing stay live (spread) so the list still
+  // updates in place while the modal is open.
+  const [view, setView] = useState(room.status)
+  const [dialogStay, setDialogStay] = useState(room.currentStay)
+  useEffect(() => { if (!open) { setView(room.status); setDialogStay(room.currentStay) } }, [open, room.status, room.currentStay])
+  const dialogRoom = { ...room, status: view, currentStay: dialogStay }
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { if (o) { setView(room.status); setDialogStay(room.currentStay) } setOpen(o) }}>
       <DialogTrigger asChild>
         <button
           style={{ '--tile': STATUS_TILE[room.status] } as React.CSSProperties}
@@ -125,19 +138,19 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
           <DialogTitle className="flex items-center gap-2 pr-8 font-display">
             Quarto {room.number}
             {room.category && <span className="text-sm font-normal text-muted-foreground">· {room.category.description}</span>}
-            <Badge variant="secondary" className="ml-auto mr-2">{STATUS_LABEL[room.status]}</Badge>
+            <Badge variant="secondary" className="ml-auto mr-2">{STATUS_LABEL[dialogRoom.status]}</Badge>
           </DialogTitle>
         </DialogHeader>
-        {room.status === 'free' && <FreeActions room={room} onDone={() => setOpen(false)} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />}
-        {occupied && room.currentStay && <OccupiedPanel room={room} products={products} canCancel={canCancel} onDone={() => setOpen(false)} />}
-        {room.status === 'cleaning' && <SimpleStatus number={room.number} status="free" label="Liberar (limpo)" onDone={() => setOpen(false)} />}
-        {room.status === 'maintenance' && (
+        {dialogRoom.status === 'free' && <FreeActions room={dialogRoom} onDone={() => setOpen(false)} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />}
+        {dialogRoom.status === 'occupied' && dialogRoom.currentStay && <OccupiedPanel room={dialogRoom} products={products} canCancel={canCancel} onDone={() => setOpen(false)} />}
+        {dialogRoom.status === 'cleaning' && <SimpleStatus number={room.number} status="free" label="Liberar (limpo)" onDone={() => setOpen(false)} />}
+        {dialogRoom.status === 'maintenance' && (
           <div className="grid gap-2">
             <p className="text-sm text-muted-foreground">Motivo: {room.maintenanceReason}</p>
             <SimpleStatus number={room.number} status="free" label="Voltar de manutenção" onDone={() => setOpen(false)} />
           </div>
         )}
-        {canCancel && (room.status === 'free' || room.status === 'cleaning') && room.lastClosedStayId && (
+        {canCancel && (dialogRoom.status === 'free' || dialogRoom.status === 'cleaning') && room.lastClosedStayId && (
           <CancelExit roomNumber={room.number} onDone={() => setOpen(false)} />
         )}
       </DialogContent>
@@ -164,7 +177,9 @@ function Section({ title, right, children }: { title: string; right?: React.Reac
 
 export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { room: Room; onDone: () => void; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
   const [state, action] = useActionState<ActionState, FormData>(checkInAction, { ok: false })
+  const [day, setDay] = useState<'normal' | 'special'>(suggestedDay)
   useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
+  const t = room.tariff?.[day]
   return (
     <div className="grid gap-4">
       <form action={action} className="grid gap-3">
@@ -179,13 +194,19 @@ export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { r
           </div>
           <div className="grid gap-1">
             <Label htmlFor="day">Tabela</Label>
-            <NativeSelect id="day" name="day" defaultValue={suggestedDay}>
+            <NativeSelect id="day" name="day" value={day} onChange={(e) => setDay(e.target.value as 'normal' | 'special')}>
               <NativeSelectOption value="normal">Semana</NativeSelectOption>
               <NativeSelectOption value="special">Fim de semana</NativeSelectOption>
             </NativeSelect>
             <span className="text-[11px] text-muted-foreground">sugerido pela data: {dayReasonLabel(suggestedReason)}</span>
           </div>
         </div>
+        {t && (
+          <div className="flex items-center justify-between rounded-lg border border-primary/25 bg-primary/[0.04] px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Valor do quarto</span>
+            <span className="tnum font-medium">Período {money(t.base)} · Pernoite {money(t.overnight)}</span>
+          </div>
+        )}
         <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1"><Label htmlFor="guests">Hóspedes</Label><Input id="guests" name="guests" type="number" min="1" defaultValue="2" /></div>
@@ -317,24 +338,31 @@ function RemoveItem({ id }: { id: string }) {
   return <form action={action}><Button size="icon" variant="ghost" type="submit" className="size-6 text-muted-foreground hover:text-destructive" aria-label="Remover item">×</Button></form>
 }
 
+// Print the checkout ticket without keeping the modal open. Try a popup first;
+// when it's blocked (common on the reception tablet) fall back to a hidden
+// same-origin iframe that auto-prints itself.
+function printTicket(stayId: string) {
+  const url = `/ticket/${stayId}?auto=1`
+  const w = window.open(url, 'ticket', 'width=380,height=640')
+  if (w) return
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  iframe.src = url
+  document.body.appendChild(iframe)
+  setTimeout(() => iframe.remove(), 60000)
+}
+
 function CheckOut({ roomNumber, stayId, onDone }: { roomNumber: string; stayId: string; onDone: () => void }) {
   const [state, formAction] = useActionState<ActionState, FormData>(async () => checkOutAction(roomNumber), { ok: false })
-  const [blocked, setBlocked] = useState(false)
   useEffect(() => {
     if (!state.ok) return
-    const w = window.open(`/ticket/${stayId}?auto=1`, 'ticket', 'width=380,height=640')
-    if (w) onDone()
-    else setBlocked(true)
+    printTicket(stayId)
+    onDone() // always close the modal after the action
   }, [state.ok, stayId, onDone])
   return (
     <form action={formAction} className="grid gap-2">
       <Submit className="w-full">Confirmar saída</Submit>
       {state.error && <p className="mt-1 text-destructive text-sm">{state.error}</p>}
-      {blocked && (
-        <a href={`/ticket/${stayId}?auto=1`} target="_blank" rel="noopener" className="text-center text-sm font-medium text-primary underline">
-          Imprimir ticket
-        </a>
-      )}
     </form>
   )
 }

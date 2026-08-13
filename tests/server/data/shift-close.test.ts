@@ -3,9 +3,10 @@ const session = vi.hoisted(() => ({ current: { id: 1, name: 'R', role: 'receptio
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 import { db } from '@/server/db'
 import { addCashMovement, closeShift, getOrOpenCurrentShift } from '@/server/data/shifts'
+import { hashPassword } from '@/server/password'
 
 beforeEach(async () => {
-  await db.employee.create({ data: { id: 1, name: 'R', username: 'r', role: 'reception', passwordHash: 'x' } })
+  await db.employee.create({ data: { id: 1, name: 'R', username: 'r', role: 'reception', passwordHash: await hashPassword('rpass') } })
 })
 
 describe('retirada + fechamento', () => {
@@ -19,7 +20,7 @@ describe('retirada + fechamento', () => {
 
   it('close computes saldo, records final withdrawals, sets closedBy (carry is covered by shift-open)', async () => {
     const s = await getOrOpenCurrentShift() // opening 150
-    const metrics = await closeShift(s.id, { finalWithdrawCash: 50, finalWithdrawCard: 0 })
+    const metrics = await closeShift(s.id, { finalWithdrawCash: 50, finalWithdrawCard: 0, password: 'rpass' })
     expect(metrics.retiradoDinheiro).toBe(50)
     expect(metrics.saldo).toBe(100) // 150 − 50
     const closed = await db.shift.findUniqueOrThrow({ where: { id: s.id } })

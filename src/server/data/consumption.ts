@@ -70,7 +70,7 @@ export async function walkinSale(input: { items: { productCode: string; qty: num
   const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   const result = await db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
-      data: { type: 'walkin', roomNumber: '99', checkIn: now, checkOut: now, status: 'closed', stayAmount: 0, consumptionAmount: total, paymentEmployeeId: me.id },
+      data: { type: 'walkin', roomNumber: '99', checkIn: now, checkOut: now, status: 'closed', stayAmount: 0, consumptionAmount: total, paymentEmployeeId: me.id, shiftId: openShiftId },
     })
     for (const i of input.items) {
       await tx.consumption.create({ data: { stayId: stay.id, productCode: i.productCode, qty: i.qty, unitPrice: priceOf(i.productCode) } })
