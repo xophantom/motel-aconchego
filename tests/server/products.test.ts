@@ -4,7 +4,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { listProducts, upsertProduct } from '@/server/data/products'
+import { listProducts, upsertProduct, lowStockProducts } from '@/server/data/products'
 
 beforeEach(async () => {
   await db.consumption.deleteMany(); await db.stockMovement.deleteMany(); await db.product.deleteMany()
@@ -29,5 +29,13 @@ describe('products DAL', () => {
   it('reception cannot upsert', async () => {
     session.current = { id: 2, name: 'R', role: 'reception' }
     await expect(upsertProduct({ code: 'X', description: 'x', category: 'other', price: 1, cost: 0, stockQty: 0, minStock: 0, trackStock: true })).rejects.toThrow(/forbidden/i)
+  })
+
+  it('lowStockProducts returns only tracked items at or below their minimum', async () => {
+    await upsertProduct({ code: 'A', description: 'Baixo', category: 'minibar', price: 1, cost: 0, stockQty: 2, minStock: 5, trackStock: true })
+    await upsertProduct({ code: 'B', description: 'Ok', category: 'minibar', price: 1, cost: 0, stockQty: 10, minStock: 5, trackStock: true })
+    await upsertProduct({ code: 'C', description: 'Sem controle', category: 'minibar', price: 1, cost: 0, stockQty: 0, minStock: 5, trackStock: false })
+    const low = await lowStockProducts()
+    expect(low.map((p) => p.code)).toEqual(['A'])
   })
 })

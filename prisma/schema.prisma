@@ -371,6 +371,13 @@ model TariffPolicy {
   @@map("tariff_policy")
 }
 
+model RegionalHoliday {
+  id       Int    @id @default(autoincrement())
+  monthDay String @unique @map("month_day") // "MM-DD", recorre todo ano
+  name     String
+  @@map("regional_holiday")
+}
+
 enum CashMethod {
   cash
   card

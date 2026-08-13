@@ -15,10 +15,17 @@ function nextDay(d: CivilDate): CivilDate {
   return { year: n.getUTCFullYear(), month: n.getUTCMonth() + 1, day: n.getUTCDate() }
 }
 
-// Precedence: holiday > holiday_eve > weekend > weekday.
-export function resolveDay(d: CivilDate, specialWeekdays: number[]): { day: DayType; reason: DayReason } {
-  if (isNationalHoliday(d)) return { day: 'special', reason: 'holiday' }
-  if (isNationalHoliday(nextDay(d))) return { day: 'special', reason: 'holiday_eve' }
+function mmddOf(d: CivilDate): string {
+  return `${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
+}
+
+// Precedence: holiday > holiday_eve > weekend > weekday. `customHolidays` are
+// recurring regional holidays as "MM-DD" strings, treated like national ones.
+export function resolveDay(d: CivilDate, specialWeekdays: number[], customHolidays: string[] = []): { day: DayType; reason: DayReason } {
+  const custom = new Set(customHolidays)
+  const isHoliday = (x: CivilDate) => isNationalHoliday(x) || custom.has(mmddOf(x))
+  if (isHoliday(d)) return { day: 'special', reason: 'holiday' }
+  if (isHoliday(nextDay(d))) return { day: 'special', reason: 'holiday_eve' }
   if (specialWeekdays.includes(weekday(d))) return { day: 'special', reason: 'weekend' }
   return { day: 'normal', reason: 'weekday' }
 }

@@ -66,3 +66,27 @@ export async function updateTariffPolicy(specialWeekdays: number[]): Promise<{ s
   await logEvent({ type: 'tariff.policy', description: `Dias especiais: [${clean.join(', ')}]`, entity: 'tariff_policy', entityId: '1' })
   return { specialWeekdays: row.specialWeekdays }
 }
+
+const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
+
+// Recurring regional holidays ("MM-DD"), treated like national ones by resolveDay.
+export async function listRegionalHolidays() {
+  const me = await getCurrentUser()
+  if (!me) throw new Error('Forbidden')
+  return db.regionalHoliday.findMany({ orderBy: { monthDay: 'asc' }, select: { id: true, monthDay: true, name: true } })
+}
+
+export async function addRegionalHoliday(monthDay: string, name: string) {
+  await requireTariffManager()
+  if (!MONTH_DAY_RE.test(monthDay)) throw new Error('Data inválida (use MM-DD)')
+  const clean = name.trim() || 'Feriado regional'
+  const row = await db.regionalHoliday.upsert({ where: { monthDay }, update: { name: clean }, create: { monthDay, name: clean } })
+  await logEvent({ type: 'tariff.policy', description: `Feriado regional ${monthDay} · ${clean}`, entity: 'regional_holiday', entityId: String(row.id) })
+  return row
+}
+
+export async function removeRegionalHoliday(id: number) {
+  await requireTariffManager()
+  await db.regionalHoliday.delete({ where: { id } })
+  await logEvent({ type: 'tariff.policy', description: `Feriado regional removido #${id}`, entity: 'regional_holiday', entityId: String(id) })
+}

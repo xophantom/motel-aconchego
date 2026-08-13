@@ -27,6 +27,18 @@ describe('resolveDay', () => {
   })
 })
 
+describe('resolveDay with custom regional holidays', () => {
+  it('special on a custom regional holiday', () => {
+    expect(resolveDay({ year: 2026, month: 8, day: 15 }, FRI_SAT, ['08-15'])).toEqual({ day: 'special', reason: 'holiday' })
+  })
+  it('special on the eve of a custom regional holiday', () => {
+    expect(resolveDay({ year: 2026, month: 8, day: 14 }, FRI_SAT, ['08-15'])).toEqual({ day: 'special', reason: 'holiday_eve' })
+  })
+  it('ignores custom holidays that do not match the date', () => {
+    expect(resolveDay({ year: 2026, month: 9, day: 8 }, FRI_SAT, ['08-15'])).toEqual({ day: 'normal', reason: 'weekday' })
+  })
+})
+
 describe('dayReasonLabel', () => {
   it('maps reasons to PT-BR labels', () => {
     expect(dayReasonLabel('holiday')).toBe('feriado')

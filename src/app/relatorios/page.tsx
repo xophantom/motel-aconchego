@@ -50,6 +50,7 @@ export async function ReportBody({ searchParams }: { searchParams: Promise<Recor
               </>
             )}
             <Button type="submit">Ver</Button>
+            <Button asChild variant="outline"><a href={`/relatorios/print?${q}&auto=1`} target="_blank" rel="noopener">Imprimir (80mm)</a></Button>
             <Button asChild variant="outline"><a href={`/relatorios/csv?${q}`}>Baixar CSV</a></Button>
             <Button asChild variant="outline"><a href={`/relatorios/pdf?${q}`}>Baixar PDF</a></Button>
           </form>

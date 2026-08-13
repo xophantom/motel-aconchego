@@ -59,7 +59,10 @@ export async function ProductsBody({ searchParams }: { searchParams: Promise<{ p
       )}
 
       <Card>
-        <CardHeader><CardTitle>Reposição / ajuste de estoque</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle>Reposição / ajuste de estoque</CardTitle>
+          <Button asChild variant="outline" size="sm"><a href="/produtos/baixo?auto=1" target="_blank" rel="noopener">Imprimir baixos (80mm)</a></Button>
+        </CardHeader>
         <CardContent className="grid gap-4">
           <StockForm products={productOptions} />
           <form method="GET" className="flex items-end gap-2 border-t pt-3">

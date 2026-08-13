@@ -39,3 +39,26 @@ export async function updateTariffPolicyAction(_prev: ActionState, fd: FormData)
   revalidatePath('/quartos')
   return { ok: true }
 }
+
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return /forbidden/i.test(e.message) ? 'Sem permissão.' : e.message
+  return 'Erro ao salvar.'
+}
+
+export async function addRegionalHolidayAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const date = String(fd.get('date') ?? '')
+  const name = String(fd.get('name') ?? '')
+  // <input type="date"> gives "YYYY-MM-DD"; keep only "MM-DD" (recurring).
+  const monthDay = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(5) : date
+  try { await tariff.addRegionalHoliday(monthDay, name) }
+  catch (e) { return { ok: false, error: errMsg(e) } }
+  revalidatePath('/tarifas'); revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function removeRegionalHolidayAction(id: number, _prev: ActionState, _fd: FormData): Promise<ActionState> {
+  try { await tariff.removeRegionalHoliday(id) }
+  catch (e) { return { ok: false, error: errMsg(e) } }
+  revalidatePath('/tarifas'); revalidatePath('/quartos')
+  return { ok: true }
+}
