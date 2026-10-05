@@ -18,7 +18,7 @@ async function Caixa() {
   await connection()
   const me = await getCurrentUser()
   let summary, closed, policy
-  try { summary = await currentShiftSummary(); closed = await listClosedShifts(10); policy = await getCashPolicy() }
+  try { ;[summary, closed, policy] = await Promise.all([currentShiftSummary(), listClosedShifts(10), getCashPolicy()]) }
   catch (e) { if (e instanceof Error && /forbidden/i.test(e.message)) redirect('/'); throw e }
   const isManager = me?.role === 'manager'
   if (summary.closed || !summary.shift) {

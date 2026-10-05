@@ -25,8 +25,7 @@ export async function ProductsBody({ searchParams }: { searchParams: Promise<{ p
   if (!me || !can(me.role, 'stock:adjust')) redirect('/')
   const isManager = can(me.role, 'product:manage')
   const sp = await searchParams
-  const products = await listProducts()
-  const movements = await listStockMovements({ productCode: sp.product || undefined })
+  const [products, movements] = await Promise.all([listProducts(), listStockMovements({ productCode: sp.product || undefined })])
   const productOptions = products.map((p) => ({ code: p.code, description: p.description }))
   return (
     <div className="grid gap-6">

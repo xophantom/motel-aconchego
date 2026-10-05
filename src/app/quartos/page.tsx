@@ -16,29 +16,27 @@ async function Board() {
   await connection()
   let rooms, cats
   try {
-    rooms = await listRoomsWithCurrentStay()
-    cats = await listCategoriesForBoard()
+    ;[rooms, cats] = await Promise.all([listRoomsWithCurrentStay(), listCategoriesForBoard()])
   } catch { redirect('/login') }
-  const products = await listProducts()
-  const canCancel = await canCancelNow()
   const me = await getCurrentUser()
   const canCash = me?.role === 'manager' || me?.role === 'reception'
+  const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
+  // Independent reads: fetch them together instead of one round-trip after another.
+  const [products, canCancel, sum, policy, regional, allCons] = await Promise.all([
+    listProducts(),
+    canCancelNow(),
+    canCash ? currentShiftSummary().catch(() => null) : null,
+    getTariffPolicy(),
+    listRegionalHolidays(),
+    listConsumptionForStays(openStayIds),
+  ])
   let currentShiftId: string | null = null
   let shiftSaldo = 0, retiradoDinheiro = 0, retiradoCartao = 0
-  if (canCash) {
-    try {
-      const sum = await currentShiftSummary()
-      if (!sum.closed && sum.shift && sum.metrics) {
-        currentShiftId = String(sum.shift.id)
-        shiftSaldo = sum.metrics.saldo; retiradoDinheiro = sum.metrics.retiradoDinheiro; retiradoCartao = sum.metrics.retiradoCartao
-      }
-    } catch { currentShiftId = null }
+  if (sum && !sum.closed && sum.shift && sum.metrics) {
+    currentShiftId = String(sum.shift.id)
+    shiftSaldo = sum.metrics.saldo; retiradoDinheiro = sum.metrics.retiradoDinheiro; retiradoCartao = sum.metrics.retiradoCartao
   }
-  const policy = await getTariffPolicy()
-  const regional = await listRegionalHolidays()
   const suggested = resolveDay(civilDateInSaoPaulo(new Date()), policy.specialWeekdays, regional.map((h) => h.monthDay))
-  const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
-  const allCons = await listConsumptionForStays(openStayIds)
   const byStay = new Map<string, { id: string; description: string; qty: number; unitPrice: number }[]>()
   for (const c of allCons) {
     const key = String(c.stayId)

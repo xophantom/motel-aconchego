@@ -18,7 +18,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ auto?: string
   await connection()
   const { auto } = await searchParams
   let rooms, cats
-  try { rooms = await listRoomsWithCurrentStay(); cats = await listCategoriesForBoard() }
+  try { ;[rooms, cats] = await Promise.all([listRoomsWithCurrentStay(), listCategoriesForBoard()]) }
   catch { redirect('/login') }
   const catById = new Map(cats.map((c) => [c.id, c]))
   const now = Date.now()
