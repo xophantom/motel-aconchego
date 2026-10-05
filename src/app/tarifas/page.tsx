@@ -17,8 +17,7 @@ async function TariffList() {
   await connection()
   let cats
   try { cats = await listCategoriesWithRates() } catch { redirect('/') }
-  const policy = await getTariffPolicy()
-  const regional = await listRegionalHolidays()
+  const [policy, regional] = await Promise.all([getTariffPolicy(), listRegionalHolidays()])
   const year = civilDateInSaoPaulo(new Date()).year
   const holidays = nationalHolidayList(year)
   return (

@@ -88,12 +88,14 @@ export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
   // checkout), consistent with how cash movements are attributed. This avoids the
   // time-window overlap of unbounded open shifts.
   const stayWhere = { status: 'closed' as const, shiftId: shift.id }
-  const roomAgg = await db.stay.aggregate({ where: { ...stayWhere, type: 'room' }, _count: { _all: true }, _sum: { stayAmount: true } })
-  const consumoAgg = await db.stay.aggregate({ where: stayWhere, _sum: { consumptionAmount: true } })
+  const [roomAgg, consumoAgg, movs] = await Promise.all([
+    db.stay.aggregate({ where: { ...stayWhere, type: 'room' }, _count: { _all: true }, _sum: { stayAmount: true } }),
+    db.stay.aggregate({ where: stayWhere, _sum: { consumptionAmount: true } }),
+    db.cashMovement.findMany({ where: { shiftId: shift.id }, select: { type: true, amount: true, method: true } }),
+  ])
   const nAptos = roomAgg._count._all
   const totalEstadias = Number(roomAgg._sum.stayAmount ?? 0)
   const totalConsumo = Number(consumoAgg._sum.consumptionAmount ?? 0)
-  const movs = await db.cashMovement.findMany({ where: { shiftId: shift.id }, select: { type: true, amount: true, method: true } })
   const sum = (t: string) => movs.filter((m) => m.type === t).reduce((a, m) => a + Number(m.amount), 0)
   const sumMethod = (mth: string) => movs.filter((m) => m.type === 'withdrawal' && m.method === mth).reduce((a, m) => a + Math.abs(Number(m.amount)), 0)
   const round2 = (n: number) => Math.round(n * 100) / 100
@@ -120,8 +122,11 @@ export async function currentShiftSummary() {
   let shift
   try { shift = await getOrOpenCurrentShift() }
   catch (e) { if (e instanceof Error && /já fechado/i.test(e.message)) return { shift: null, movements: [], metrics: null as ShiftMetrics | null, closed: true }; throw e }
-  const movements = await db.cashMovement.findMany({ where: { shiftId: shift.id }, orderBy: { occurredAt: 'desc' } })
-  return { shift, movements, metrics: await shiftMetrics(shift), closed: false }
+  const [movements, metrics] = await Promise.all([
+    db.cashMovement.findMany({ where: { shiftId: shift.id }, orderBy: { occurredAt: 'desc' } }),
+    shiftMetrics(shift),
+  ])
+  return { shift, movements, metrics, closed: false }
 }
 
 export async function listClosedShifts(limit = 30) {
