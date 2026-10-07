@@ -20,4 +20,11 @@ describe('shiftReport', () => {
     expect(rep.metrics.total).toBe(rep.metrics.totalEstadias + rep.metrics.totalConsumo)
     expect(rep.closedByName).toBeNull()
   })
+  it('flags walk-in sales so they list as "Avulso"', async () => {
+    const shift = await db.shift.create({ data: { businessDate: new Date('2020-03-02'), period: 'day_07_19', employeeId: 1, openedAt: new Date('2020-03-02T07:00:00'), openingBalance: 150, expectedOpeningBalance: 150 } })
+    await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: new Date('2020-03-02T09:00:00'), checkOut: new Date('2020-03-02T11:00:00'), status: 'closed', stayAmount: 75, shiftId: shift.id } })
+    await db.stay.create({ data: { type: 'walkin', checkIn: new Date('2020-03-02T12:00:00'), checkOut: new Date('2020-03-02T12:00:00'), status: 'closed', stayAmount: 0, consumptionAmount: 12, shiftId: shift.id } })
+    const rep = await shiftReport(shift.id)
+    expect(rep.lines.map((l) => l.walkin)).toEqual([false, true])
+  })
 })

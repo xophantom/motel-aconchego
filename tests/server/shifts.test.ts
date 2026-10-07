@@ -4,7 +4,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { getOrOpenCurrentShift, closeShift, addCashMovement, currentShiftSummary, getOpenShiftFor, shiftReport } from '@/server/data/shifts'
+import { getOrOpenCurrentShift, closeShift, addCashMovement, currentShiftSummary, getCurrentOpenShift, shiftReport } from '@/server/data/shifts'
 import { hashPassword } from '@/server/password'
 
 beforeEach(async () => {
@@ -54,17 +54,20 @@ describe('shifts DAL', () => {
     expect(metrics!.saldo).toBe(260) // 150 + 160 - 50
   })
 
-  it('closeShift closes and forbids reopening the period', async () => {
+  it('closeShift closes; the next shift opens right away carrying the saldo', async () => {
     const s = await getOrOpenCurrentShift()
+    await addCashMovement({ type: 'supply', amount: 50 })
     await closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'boss123' })
-    expect((await getOpenShiftFor(new Date()))).toBeNull()
-    await expect(getOrOpenCurrentShift()).rejects.toThrow(/já fechado/i)
+    expect(await getCurrentOpenShift()).toBeNull()
+    const next = await getOrOpenCurrentShift()
+    expect(next.id).not.toBe(s.id)
+    expect(Number(next.openingBalance)).toBe(200) // 150 + 50
   })
 
   it('closeShift rejects a wrong operator password and leaves the shift open', async () => {
     const s = await getOrOpenCurrentShift()
     await expect(closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'wrong' })).rejects.toThrow(/senha/i)
-    expect(await getOpenShiftFor(new Date())).not.toBeNull()
+    expect(await getCurrentOpenShift()).not.toBeNull()
   })
 
   it('shiftReport lists only the stays closed in that shift', async () => {

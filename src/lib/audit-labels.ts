@@ -3,6 +3,8 @@
 export const EVENT_TYPE_LABEL: Record<string, string> = {
   'stay.checkin': 'Entrada',
   'stay.checkout': 'Saída',
+  'stay.prepaid': 'Antecipado',
+  'stay.edit_checkin': 'Horário de entrada',
   'room.status': 'Status quarto',
   'shift.open': 'Caixa aberto',
   'shift.close': 'Caixa fechado',

@@ -5,7 +5,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { checkInAction, setRoomStatusAction } from '@/app/quartos/actions'
+import { checkInAction, setRoomStatusAction, addPrepaidAction, editCheckInAction } from '@/app/quartos/actions'
 
 beforeEach(async () => {
   await db.loyaltyRedemption.deleteMany()
@@ -29,5 +29,19 @@ describe('quartos actions', () => {
   it('setRoomStatusAction maintenance requires reason', async () => {
     const res = await setRoomStatusAction({ ok: false }, form({ number: '01', status: 'maintenance' }))
     expect(res.ok).toBe(false)
+  })
+  it('checkInAction treats an empty entry time as now', async () => {
+    const res = await checkInAction({ ok: false }, form({ roomNumber: '01', day: 'normal', guests: '2', prepaidAmount: '0', checkInTime: '' }))
+    expect(res.ok).toBe(true)
+  })
+  it('addPrepaidAction requires a positive amount', async () => {
+    await checkInAction({ ok: false }, form({ roomNumber: '01', day: 'normal', guests: '2', prepaidAmount: '0' }))
+    expect((await addPrepaidAction('01', { ok: false }, form({ amount: '0' }))).ok).toBe(false)
+    expect((await addPrepaidAction('01', { ok: false }, form({ amount: '25' }))).ok).toBe(true)
+  })
+  it('editCheckInAction rejects a malformed time', async () => {
+    await checkInAction({ ok: false }, form({ roomNumber: '01', day: 'normal', guests: '2', prepaidAmount: '0' }))
+    const res = await editCheckInAction('01', { ok: false }, form({ checkInTime: '99:99' }))
+    expect(res).toEqual({ ok: false, error: 'Informe o horário (HH:MM).' })
   })
 })

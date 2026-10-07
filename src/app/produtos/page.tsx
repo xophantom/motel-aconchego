@@ -15,9 +15,10 @@ import { PageHeader } from '@/components/page-header'
 import { ProductForm } from './product-form'
 import { StockForm } from './stock-form'
 import { reasonLabel } from '@/lib/stock-labels'
+import { MOTEL_TZ } from '@/lib/time'
 
 const CAT_LABEL: Record<string, string> = { minibar: 'Frigobar', erotic: 'Erótico', kitchen: 'Cozinha', other: 'Outro' }
-const dtm = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const dtm = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ })
 
 export async function ProductsBody({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
   await connection()

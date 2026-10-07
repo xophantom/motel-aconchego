@@ -6,6 +6,7 @@ import { listCategoriesForBoard } from '@/server/data/tariff'
 import { computeStayAmount } from '@/lib/billing'
 import { MOTEL_NAME } from '@/lib/config'
 import { AutoPrint, PrintButton } from '@/components/ticket-controls'
+import { MOTEL_TZ } from '@/lib/time'
 
 const STATUS_LABEL: Record<string, string> = { free: 'Livre', occupied: 'Ocupado', cleaning: 'Limpeza', maintenance: 'Manutenção' }
 const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -47,7 +48,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ auto?: string
       <div id="ticket" className="ticket">
         <div className="t-center t-bold">{MOTEL_NAME}</div>
         <div className="t-center">Status dos quartos</div>
-        <div className="t-center t-small">{new Date().toLocaleString('pt-BR')}</div>
+        <div className="t-center t-small">{new Date().toLocaleString('pt-BR', { timeZone: MOTEL_TZ })}</div>
         <div className="t-sep" />
         {lines.map((l) => (
           <div className="t-row t-small" key={l.number}>

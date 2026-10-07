@@ -4,7 +4,8 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { checkIn, checkOut } from '@/server/data/stays'
+import { checkIn, checkOut, addPrepaid, updateCheckInTime } from '@/server/data/stays'
+import { formatHm } from '@/lib/time'
 
 let categoryId: number
 beforeEach(async () => {
@@ -96,5 +97,73 @@ describe('audit trail', () => {
     expect(ev).toHaveLength(1)
     expect(ev[0].entityId).toBe(String(stay.id))
     expect(ev[0].roomNumber).toBe('01')
+  })
+})
+
+const minutesAgo = (n: number) => new Date(Date.now() - n * 60000)
+
+describe('check-in with a typed entry time', () => {
+  it('back-dates the entry to the typed time (forgot to check in)', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, checkInTime: formatHm(minutesAgo(90)) })
+    const ageMin = (Date.now() - stay.checkIn.getTime()) / 60000
+    expect(ageMin).toBeGreaterThanOrEqual(89)
+    expect(ageMin).toBeLessThan(92)
+  })
+  it('without a typed time it uses now', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    expect(Date.now() - stay.checkIn.getTime()).toBeLessThan(5000)
+  })
+  it('rejects an entry older than 12h', async () => {
+    await expect(checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, checkInTime: formatHm(minutesAgo(13 * 60)) })).rejects.toThrow(/too old/)
+  })
+  it('rejects an entry before the room\'s previous checkout', async () => {
+    await db.stay.create({ data: { type: 'room', roomNumber: '01', categoryId, checkIn: minutesAgo(240), checkOut: minutesAgo(60), status: 'closed', stayAmount: 75 } })
+    await expect(checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, checkInTime: formatHm(minutesAgo(120)) })).rejects.toThrow(/previous checkout/)
+    const ok = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, checkInTime: formatHm(minutesAgo(30)) })
+    expect(ok.status).toBe('open')
+  })
+})
+
+describe('prepaid after entry', () => {
+  it('adds to the stay prepaid, records a cash movement and is deducted at checkout', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 20 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: minutesAgo(30) } })
+    const updated = await addPrepaid('01', 40)
+    expect(Number(updated.prepaidAmount)).toBe(60)
+    const { balance } = await checkOut('01')
+    expect(balance).toBe(15) // 75 - (20 + 40)
+    const movs = await db.cashMovement.findMany({ orderBy: { id: 'asc' } })
+    expect(movs.map((m) => Number(m.amount))).toEqual([20, 40, 15])
+    expect(await db.eventLog.count({ where: { type: 'stay.prepaid' } })).toBe(1)
+  })
+  it('rejects a free room and non-positive amounts', async () => {
+    await expect(addPrepaid('01', 10)).rejects.toThrow(/not occupied/)
+    await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    await expect(addPrepaid('01', 0)).rejects.toThrow(/invalid amount/)
+  })
+  it('housekeeper cannot launch prepaid', async () => {
+    await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    session.current = { id: 1, name: 'Cam', role: 'housekeeper' }
+    await expect(addPrepaid('01', 10)).rejects.toThrow(/forbidden/i)
+  })
+})
+
+describe('edit entry time', () => {
+  it('moves the open stay entry and logs before → after', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    const typed = formatHm(minutesAgo(45))
+    const updated = await updateCheckInTime('01', typed)
+    expect(updated.id).toBe(stay.id)
+    expect(formatHm(updated.checkIn)).toBe(typed)
+    const ev = await db.eventLog.findFirstOrThrow({ where: { type: 'stay.edit_checkin' } })
+    expect(ev.description).toContain(`→ ${typed}`)
+  })
+  it('respects the previous checkout of the room', async () => {
+    await db.stay.create({ data: { type: 'room', roomNumber: '01', categoryId, checkIn: minutesAgo(240), checkOut: minutesAgo(60), status: 'closed', stayAmount: 75 } })
+    await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    await expect(updateCheckInTime('01', formatHm(minutesAgo(90)))).rejects.toThrow(/previous checkout/)
+  })
+  it('rejects a room that is not occupied', async () => {
+    await expect(updateCheckInTime('01', '10:00')).rejects.toThrow(/not occupied/)
   })
 })

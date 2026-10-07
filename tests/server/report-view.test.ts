@@ -30,7 +30,7 @@ describe('reportView', () => {
   it('builds a range report with columns for movement', async () => {
     const v = await reportView({ type: 'movement', from: '2026-07-04', to: '2026-07-04' })
     expect(v.type).toBe('movement')
-    expect(v.period).toEqual({ kind: 'range', from: new Date(2026, 6, 4), to: new Date(2026, 6, 4) })
+    expect(v.period).toEqual({ kind: 'range', from: new Date(Date.UTC(2026, 6, 4)), to: new Date(Date.UTC(2026, 6, 4)) }) // civil dates = UTC midnight
     expect(v.columns.some((c) => c.key === 'operator')).toBe(true)
   })
 

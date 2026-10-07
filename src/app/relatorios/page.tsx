@@ -10,8 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { PageHeader } from '@/components/page-header'
+import { civilIso } from '@/lib/time'
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const iso = civilIso
 
 export async function ReportBody({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await connection()

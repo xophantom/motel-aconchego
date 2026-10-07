@@ -3,6 +3,7 @@ import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import type { ReportColumn } from '@/lib/report-format'
+import { civilDate, parseCivilDate, spDayRange, spStartOf, todayCivil } from '@/lib/time'
 
 export type ReportRow = {
   roomNumber: string
@@ -21,11 +22,8 @@ export type MonthlyReport = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-function dayRange(from: Date, to: Date) {
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate())
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1)
-  return { start, end }
-}
+// from/to are civil dates; days run 00:00–24:00 Brasília.
+const dayRange = spDayRange
 async function requireReports() {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'report:view')) throw new Error('Forbidden')
@@ -37,8 +35,8 @@ export async function monthlyOccupancy(year: number, month: number): Promise<Mon
   if (!me || !can(me.role, 'report:view')) throw new Error('Forbidden')
   month = Math.min(12, Math.max(1, Math.trunc(month)))
   year = Math.min(2100, Math.max(2000, Math.trunc(year)))
-  const start = new Date(year, month - 1, 1)
-  const end = new Date(year, month, 1)
+  const start = spStartOf(civilDate(year, month, 1))
+  const end = spStartOf(civilDate(year, month + 1, 1))
   const stays = await db.stay.findMany({
     where: { type: 'room', status: 'closed', checkOut: { gte: start, lt: end } },
     select: { roomNumber: true, stayAmount: true, consumptionAmount: true, category: { select: { code: true } } },
@@ -191,19 +189,14 @@ export type ReportView = { type: string; title: string; columns: ReportColumn[];
 
 export const REPORT_TYPES = ['occupancy', 'movement', 'stays_orders', 'bar', 'operator']
 
-function civilDate(s: string | undefined, fallback: Date): Date {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return fallback
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
 
 export async function reportView(sp: Record<string, string | undefined>): Promise<ReportView> {
   const type = REPORT_TYPES.includes(sp.type ?? '') ? (sp.type as string) : 'occupancy'
-  const now = new Date()
+  const today = todayCivil()
 
   if (type === 'occupancy') {
-    const year = Number(sp.year) || now.getFullYear()
-    const month = Number(sp.month) || now.getMonth() + 1
+    const year = Number(sp.year) || today.getUTCFullYear()
+    const month = Number(sp.month) || today.getUTCMonth() + 1
     const rep = await monthlyOccupancy(year, month)
     return {
       type, title: `Ocupação ${String(rep.month).padStart(2, '0')}/${rep.year}`,
@@ -221,8 +214,8 @@ export async function reportView(sp: Record<string, string | undefined>): Promis
     }
   }
 
-  const from = civilDate(sp.from, new Date(now.getFullYear(), now.getMonth(), 1))
-  const to = civilDate(sp.to, now)
+  const from = parseCivilDate(sp.from) ?? civilDate(today.getUTCFullYear(), today.getUTCMonth() + 1, 1)
+  const to = parseCivilDate(sp.to) ?? today
   const period: ReportPeriod = { kind: 'range', from, to }
 
   if (type === 'movement') {

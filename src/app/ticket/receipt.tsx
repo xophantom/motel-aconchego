@@ -1,8 +1,9 @@
 import type { TicketData } from '@/server/data/stays'
 import { MOTEL_NAME } from '@/lib/config'
+import { MOTEL_TZ } from '@/lib/time'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const dt = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const dt = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ })
 function durationLabel(a: Date, b: Date | null) {
   if (!b) return '—'
   const min = Math.max(0, Math.round((b.getTime() - a.getTime()) / 60000))

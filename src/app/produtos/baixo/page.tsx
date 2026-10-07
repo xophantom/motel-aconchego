@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { lowStockProducts } from '@/server/data/products'
 import { MOTEL_NAME } from '@/lib/config'
 import { AutoPrint, PrintButton } from '@/components/ticket-controls'
+import { MOTEL_TZ } from '@/lib/time'
 
 async function Content({ searchParams }: { searchParams: Promise<{ auto?: string }> }) {
   await connection()
@@ -17,7 +18,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ auto?: string
       <div id="ticket" className="ticket">
         <div className="t-center t-bold">{MOTEL_NAME}</div>
         <div className="t-center">Produtos em falta (baixo)</div>
-        <div className="t-center t-small">{new Date().toLocaleString('pt-BR')}</div>
+        <div className="t-center t-small">{new Date().toLocaleString('pt-BR', { timeZone: MOTEL_TZ })}</div>
         <div className="t-sep" />
         <div className="t-row t-small t-bold"><span>Produto</span><span>Estoque/Mín</span></div>
         {rows.length === 0 && <div className="t-center t-small">Nenhum produto abaixo do mínimo.</div>}

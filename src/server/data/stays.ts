@@ -4,9 +4,10 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { computeStayAmount } from '@/lib/billing'
 import type { CheckInInput } from '@/lib/validation/stay'
-import { getOpenShiftFor, getOrOpenCurrentShift } from '@/server/data/shifts'
+import { getCurrentOpenShift, getOrOpenCurrentShift } from '@/server/data/shifts'
 import { customerByPlate } from '@/server/data/loyalty'
 import { logEvent } from '@/server/audit'
+import { formatHm, resolveEntryTime } from '@/lib/time'
 
 async function requireOps() {
   const me = await getCurrentUser()
@@ -18,10 +19,26 @@ async function requireCancelWindow() {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'stay:cancel')) throw new Error('Forbidden')
   if (me.role !== 'manager') {
-    const open = await getOpenShiftFor(new Date())
+    const open = await getCurrentOpenShift()
     if (!open) throw new Error('shift closed')
   }
   return me
+}
+
+// A back-dated entry ("forgot to check the room in") can't reach further back
+// than this, nor before the room's previous checkout.
+const MAX_ENTRY_BACKDATE_MS = 12 * 60 * 60_000
+
+async function resolveCheckInAt(roomNumber: string, hhmm: string, now: Date, excludeStayId?: bigint): Promise<Date> {
+  const at = resolveEntryTime(hhmm, now)
+  if (now.getTime() - at.getTime() > MAX_ENTRY_BACKDATE_MS) throw new Error('entry time too old')
+  const prev = await db.stay.findFirst({
+    where: { roomNumber, status: 'closed', checkOut: { not: null }, ...(excludeStayId ? { id: { not: excludeStayId } } : {}) },
+    orderBy: { checkOut: 'desc' },
+    select: { checkOut: true },
+  })
+  if (prev?.checkOut && at < prev.checkOut) throw new Error('entry time before previous checkout')
+  return at
 }
 
 export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { chargeMode?: 'period' | 'overnight' }) {
@@ -29,6 +46,8 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   const room = await db.room.findUniqueOrThrow({ where: { number: input.roomNumber } })
   if (room.status !== 'free') throw new Error('Room is not free')
   if (!room.categoryId) throw new Error('Room has no category')
+  const now = new Date()
+  const checkInAt = input.checkInTime ? await resolveCheckInAt(input.roomNumber, input.checkInTime, now) : now
   const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
   const customer = input.plate ? await customerByPlate(input.plate) : null
   const stay = await db.$transaction(async (tx) => {
@@ -37,7 +56,7 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
         type: 'room',
         roomNumber: input.roomNumber,
         categoryId: room.categoryId,
-        checkIn: new Date(),
+        checkIn: checkInAt,
         day: input.day,
         chargeMode: input.chargeMode ?? 'period',
         guests: input.guests,
@@ -57,12 +76,45 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   })
   await logEvent({
     type: 'stay.checkin',
-    description: `Entrada quarto ${input.roomNumber}${input.plate ? ` · placa ${input.plate}` : ''}`,
+    description: `Entrada quarto ${input.roomNumber}${input.plate ? ` · placa ${input.plate}` : ''}${checkInAt !== now ? ` · horário informado ${formatHm(checkInAt)}` : ''}`,
     entity: 'stay',
     entityId: String(stay.id),
     roomNumber: input.roomNumber,
   })
   return stay
+}
+
+async function requireOpenStay(roomNumber: string) {
+  const room = await db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true } })
+  if (room.status !== 'occupied' || !room.currentStay || room.currentStay.status !== 'open') throw new Error('Room is not occupied')
+  return room.currentStay
+}
+
+// Prepaid received after the entry: adds to the stay's prepaid (deducted at
+// checkout) and enters the current shift's cash now, like a check-in prepaid.
+export async function addPrepaid(roomNumber: string, amount: number) {
+  const me = await requireOps()
+  if (!(amount > 0)) throw new Error('invalid amount')
+  const stay = await requireOpenStay(roomNumber)
+  const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
+  const updated = await db.$transaction(async (tx) => {
+    await tx.cashMovement.create({
+      data: { type: 'stay', stayId: stay.id, amount, employeeId: me.id, shiftId: openShiftId, occurredAt: new Date(), description: `Antecipado quarto ${roomNumber}` },
+    })
+    return tx.stay.update({ where: { id: stay.id }, data: { prepaidAmount: { increment: amount } } })
+  })
+  await logEvent({ type: 'stay.prepaid', description: `Antecipado quarto ${roomNumber} · R$ ${amount.toFixed(2)}`, entity: 'stay', entityId: String(stay.id), roomNumber })
+  return updated
+}
+
+// Fix the entry time of an occupied room (entry registered late or typo).
+export async function updateCheckInTime(roomNumber: string, hhmm: string) {
+  await requireOps()
+  const stay = await requireOpenStay(roomNumber)
+  const at = await resolveCheckInAt(roomNumber, hhmm, new Date(), stay.id)
+  const updated = await db.stay.update({ where: { id: stay.id }, data: { checkIn: at } })
+  await logEvent({ type: 'stay.edit_checkin', description: `Horário de entrada quarto ${roomNumber}: ${formatHm(stay.checkIn)} → ${formatHm(at)}`, entity: 'stay', entityId: String(stay.id), roomNumber })
+  return updated
 }
 
 export async function checkOut(roomNumber: string) {
@@ -156,7 +208,7 @@ export async function canCancelNow(): Promise<boolean> {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'stay:cancel')) return false
   if (me.role === 'manager') return true
-  return !!(await getOpenShiftFor(new Date()))
+  return !!(await getCurrentOpenShift())
 }
 
 export type TicketData = {

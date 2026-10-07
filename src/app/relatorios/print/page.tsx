@@ -5,11 +5,12 @@ import { reportView, type ReportPeriod } from '@/server/data/reports'
 import { formatCell } from '@/lib/report-format'
 import { MOTEL_NAME } from '@/lib/config'
 import { AutoPrint, PrintButton } from '@/components/ticket-controls'
+import { MOTEL_TZ, formatCivil } from '@/lib/time'
 
 const periodLabel = (p: ReportPeriod) =>
   p.kind === 'month'
     ? `${String(p.month).padStart(2, '0')}/${p.year}`
-    : `${p.from.toLocaleDateString('pt-BR')} — ${p.to.toLocaleDateString('pt-BR')}`
+    : `${formatCivil(p.from)} — ${formatCivil(p.to)}`
 
 async function Content({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await connection()
@@ -52,7 +53,7 @@ async function Content({ searchParams }: { searchParams: Promise<Record<string, 
           </>
         )}
         <div className="t-sep" />
-        <div className="t-center t-small">Emitido {new Date().toLocaleString('pt-BR')}</div>
+        <div className="t-center t-small">Emitido {new Date().toLocaleString('pt-BR', { timeZone: MOTEL_TZ })}</div>
       </div>
       <div className="ticket-actions"><PrintButton /></div>
     </div>
