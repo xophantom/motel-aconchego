@@ -24,7 +24,8 @@ type SP = { q?: string; placa?: string }
 async function Loyalty({ searchParams }: { searchParams: Promise<SP> }) {
   await connection()
   const me = await getCurrentUser()
-  if (!me || !can(me.role, 'loyalty:manage')) redirect('/')
+  if (!me || !can(me.role, 'loyalty:view')) redirect('/')
+  const canEditRule = can(me.role, 'loyalty:manage')
   const sp = await searchParams
   const q = sp.q?.trim() || undefined
   const [{ policy, rows }, detail] = await Promise.all([listLoyaltyCustomers(q), sp.placa ? loyaltyCustomerDetail(sp.placa) : null])
@@ -40,7 +41,7 @@ async function Loyalty({ searchParams }: { searchParams: Promise<SP> }) {
             A estadia com o benefício não conta como visita; benefícios não usados acumulam.
           </CardDescription>
         </CardHeader>
-        <CardContent><LoyaltyPolicyForm everyVisits={policy.everyVisits} discountPercent={policy.discountPercent} /></CardContent>
+        {canEditRule && <CardContent><LoyaltyPolicyForm everyVisits={policy.everyVisits} discountPercent={policy.discountPercent} /></CardContent>}
       </Card>
 
       {sp.placa && (detail ? <DetailCard detail={detail} closeHref={listHref({})} /> : (

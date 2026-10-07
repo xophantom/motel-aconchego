@@ -145,8 +145,14 @@ describe('setStayPlate', () => {
 })
 
 describe('list + detail (manager)', () => {
-  it('lists plates with progress, merging old spellings, most recent first; filters by plate', async () => {
+  it('housekeeper cannot see the list; reception can (read-only)', async () => {
+    session.current = { id: 1, name: 'H', role: 'housekeeper' }
     await expect(listLoyaltyCustomers()).rejects.toThrow(/forbidden/i)
+    await expect(loyaltyCustomerDetail('ABC1D23')).rejects.toThrow(/forbidden/i)
+    session.current = RECEPTION
+    await expect(listLoyaltyCustomers()).resolves.toMatchObject({ rows: [] })
+  })
+  it('lists plates with progress, merging old spellings, most recent first; filters by plate', async () => {
     const legacy = await db.customer.create({ data: { plate: 'ABC-1234' } })
     const canon = await db.customer.create({ data: { plate: 'ABC1C34' } })
     const other = await db.customer.create({ data: { plate: 'ZZZ9Z99' } })

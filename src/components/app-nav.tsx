@@ -16,13 +16,12 @@ async function NavContent() {
   const isRecOrMgr = isManager || me.role === 'reception'
   const links = [
     { href: '/quartos', label: 'Painel' },
-    ...(isRecOrMgr ? [{ href: '/caixa', label: 'Caixa' }, { href: '/produtos', label: 'Produtos' }] : []),
+    ...(isRecOrMgr ? [{ href: '/caixa', label: 'Caixa' }, { href: '/produtos', label: 'Produtos' }, { href: '/fidelidade', label: 'Fidelidade' }] : []),
     ...(isManager
       ? [
           { href: '/tarifas', label: 'Tarifas' },
           { href: '/relatorios', label: 'Relatórios' },
           { href: '/financeiro', label: 'Financeiro' },
-          { href: '/fidelidade', label: 'Fidelidade' },
           { href: '/users', label: 'Funcionários' },
           { href: '/auditoria', label: 'Auditoria' },
         ]
