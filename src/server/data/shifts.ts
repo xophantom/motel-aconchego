@@ -2,7 +2,7 @@ import 'server-only'
 import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
-import { currentPeriod, businessDateFor } from '@/lib/shift'
+import { shiftLabelFor } from '@/lib/shift'
 import { logEvent } from '@/server/audit'
 import { verifyPassword } from '@/server/password'
 import type { CashMovementInput, CloseShiftInput } from '@/lib/validation/shift'
@@ -14,27 +14,46 @@ async function requireCash() {
   return me
 }
 
-export function getOpenShiftFor(now: Date) {
-  return db.shift.findFirst({ where: { period: currentPeriod(now), businessDate: businessDateFor(now), closedAt: null } })
+const OPEN_SHIFT_LOCK = 7_190_719 // pg advisory lock key serializing the auto-open
+
+type Client = Pick<typeof db, 'shift'>
+
+// The current shift is the one still open — it runs until someone closes it,
+// even past its window (a night shift closed at 07:05 is still the night shift).
+// Open shifts left behind before the latest close are stale and never current.
+async function findCurrentOpen(client: Client = db) {
+  const lastClosed = await client.shift.findFirst({ where: { closedAt: { not: null } }, orderBy: { closedAt: 'desc' } })
+  const open = await client.shift.findFirst({
+    where: { closedAt: null, ...(lastClosed?.closedAt ? { openedAt: { gte: lastClosed.closedAt } } : {}) },
+    orderBy: { openedAt: 'asc' },
+  })
+  return { open, lastClosed }
 }
 
-// Resolve the current period's shift, opening it automatically (carrying the
-// previous shift's closing balance) when none is open yet.
+export async function getCurrentOpenShift() {
+  return (await findCurrentOpen()).open
+}
+
+// Resolve the current shift, opening a new one when none is open (carrying the
+// previous shift's closing balance), labeled with the window it is opened for.
 export async function getOrOpenCurrentShift() {
   const me = await getCurrentUser()
   if (!me) throw new Error('Forbidden')
-  const now = new Date()
-  const businessDate = businessDateFor(now)
-  const period = currentPeriod(now)
-  const existing = await db.shift.findUnique({ where: { businessDate_period: { businessDate, period } } })
-  if (existing && !existing.closedAt) return existing
-  if (existing && existing.closedAt) throw new Error('Caixa já fechado neste período')
-  const last = await db.shift.findFirst({ where: { closedAt: { not: null } }, orderBy: { closedAt: 'desc' } })
+  const current = await getCurrentOpenShift()
+  if (current) return current
   const { expectedOpeningBalance } = await getCashPolicy()
-  const openingBalance = last ? Number(last.closingBalance ?? 0) : expectedOpeningBalance
-  const expected = period === 'day_07_19' ? expectedOpeningBalance : openingBalance
-  const shift = await db.shift.create({ data: { businessDate, period, employeeId: me.id, openedAt: now, openingBalance, expectedOpeningBalance: expected } })
-  await logEvent({ type: 'shift.open', description: `Caixa aberto (auto) · saldo inicial R$ ${openingBalance.toFixed(2)}`, entity: 'shift', entityId: String(shift.id) })
+  const { shift, created } = await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${OPEN_SHIFT_LOCK})`
+    const { open, lastClosed } = await findCurrentOpen(tx)
+    if (open) return { shift: open, created: false }
+    const now = new Date()
+    const { period, businessDate } = shiftLabelFor(now)
+    const openingBalance = lastClosed ? Number(lastClosed.closingBalance ?? 0) : expectedOpeningBalance
+    const expected = period === 'day_07_19' ? expectedOpeningBalance : openingBalance
+    const shift = await tx.shift.create({ data: { businessDate, period, employeeId: me.id, openedAt: now, openingBalance, expectedOpeningBalance: expected } })
+    return { shift, created: true }
+  })
+  if (created) await logEvent({ type: 'shift.open', description: `Caixa aberto (auto) · saldo inicial R$ ${Number(shift.openingBalance).toFixed(2)}`, entity: 'shift', entityId: String(shift.id) })
   return shift
 }
 
@@ -119,14 +138,12 @@ export async function shiftMetrics(shift: ShiftLike): Promise<ShiftMetrics> {
 
 export async function currentShiftSummary() {
   await requireCash()
-  let shift
-  try { shift = await getOrOpenCurrentShift() }
-  catch (e) { if (e instanceof Error && /já fechado/i.test(e.message)) return { shift: null, movements: [], metrics: null as ShiftMetrics | null, closed: true }; throw e }
+  const shift = await getOrOpenCurrentShift()
   const [movements, metrics] = await Promise.all([
     db.cashMovement.findMany({ where: { shiftId: shift.id }, orderBy: { occurredAt: 'desc' } }),
     shiftMetrics(shift),
   ])
-  return { shift, movements, metrics, closed: false }
+  return { shift, movements, metrics }
 }
 
 export async function listClosedShifts(limit = 30) {
@@ -135,18 +152,30 @@ export async function listClosedShifts(limit = 30) {
   return Promise.all(shifts.map(async (s) => ({ shift: s, metrics: await shiftMetrics(s) })))
 }
 
-export type ShiftReportLine = { room: string; checkIn: Date; checkOut: Date | null; stayAmount: number; consumptionAmount: number }
+export type ShiftReportLine = { room: string; walkin?: boolean; checkIn: Date; checkOut: Date | null; stayAmount: number; consumptionAmount: number }
 export type ShiftReport = {
   shift: { id: string; period: string; businessDate: Date; openedAt: Date; closedAt: Date | null; openingBalance: number }
   metrics: ShiftMetrics; closedByName: string | null; lines: ShiftReportLine[]
 }
 
+// Stays (and walk-in sales) closed in the shift, in checkout order.
+async function linesOf(shiftId: bigint): Promise<ShiftReportLine[]> {
+  const stays = await db.stay.findMany({ where: { status: 'closed', shiftId }, orderBy: { checkOut: 'asc' } })
+  return stays.map((s) => ({
+    room: s.roomNumber ?? '—', walkin: s.type === 'walkin', checkIn: s.checkIn, checkOut: s.checkOut,
+    stayAmount: Number(s.stayAmount ?? 0), consumptionAmount: Number(s.consumptionAmount),
+  }))
+}
+
+export async function shiftLines(shiftId: bigint): Promise<ShiftReportLine[]> {
+  await requireCash()
+  return linesOf(shiftId)
+}
+
 export async function shiftReport(shiftId: bigint): Promise<ShiftReport> {
   await requireCash()
   const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId }, include: { closedBy: true } })
-  const stays = await db.stay.findMany({ where: { status: 'closed', shiftId }, orderBy: { checkOut: 'asc' } })
-  const lines: ShiftReportLine[] = stays.map((s) => ({ room: s.roomNumber ?? '—', checkIn: s.checkIn, checkOut: s.checkOut, stayAmount: Number(s.stayAmount ?? 0), consumptionAmount: Number(s.consumptionAmount) }))
-  const metrics = await shiftMetrics(shift)
+  const [lines, metrics] = await Promise.all([linesOf(shiftId), shiftMetrics(shift)])
   return {
     shift: { id: String(shift.id), period: shift.period, businessDate: shift.businessDate, openedAt: shift.openedAt, closedAt: shift.closedAt, openingBalance: Number(shift.openingBalance) },
     metrics, closedByName: shift.closedBy?.name ?? null, lines,

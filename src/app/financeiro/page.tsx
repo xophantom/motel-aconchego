@@ -10,24 +10,19 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { PageHeader } from '@/components/page-header'
 import { EntryForm, EntryRowActions, CostCenterForm, DeleteCostCenter } from './finance-forms'
+import { civilDate, civilIso, parseCivilDate, todayCivil } from '@/lib/time'
 
 const money = (n: number) => `R$ ${n.toFixed(2)}`
-// locally-constructed Dates (filters, "now") → local components
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-// @db.Date values read back from Prisma are UTC-midnight → format with UTC components
-const dbIso = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-function civil(s: string | undefined, fallback: Date): Date {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return fallback
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
+// filters and @db.Date values are civil dates (UTC midnight)
+const iso = civilIso
+const dbIso = civilIso
 
 async function Finance({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await connection()
   const sp = await searchParams
-  const now = new Date()
-  const from = civil(sp.from, new Date(now.getFullYear(), now.getMonth(), 1))
-  const to = civil(sp.to, now)
+  const today = todayCivil()
+  const from = parseCivilDate(sp.from) ?? civilDate(today.getUTCFullYear(), today.getUTCMonth() + 1, 1)
+  const to = parseCivilDate(sp.to) ?? today
   const fromStr = iso(from), toStr = iso(to)
   const costCenterFilter = sp.costCenter || undefined
 
@@ -37,7 +32,7 @@ async function Finance({ searchParams }: { searchParams: Promise<Record<string, 
       listEntries({ from, to, costCenter: costCenterFilter }),
       listCostCenters(),
       statementRange(from, to),
-      costCenterMonthly(from.getFullYear(), from.getMonth() + 1),
+      costCenterMonthly(from.getUTCFullYear(), from.getUTCMonth() + 1),
     ])
   } catch (e) {
     if (e instanceof Error && /forbidden/i.test(e.message)) redirect('/')

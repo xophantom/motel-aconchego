@@ -11,24 +11,24 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { PageHeader } from '@/components/page-header'
+import { MOTEL_TZ, civilIso, parseCivilDate, spDayRange, todayCivil } from '@/lib/time'
 
 const PAGE = 100
 
-function todayISO(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 async function Trail({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await connection()
   const sp = await searchParams
-  const now = new Date()
-  const fromStr = sp.from || todayISO(now)
-  const toStr = sp.to || todayISO(now)
+  const today = civilIso(todayCivil())
+  const fromCivil = parseCivilDate(sp.from) ?? parseCivilDate(today)!
+  const toCivil = parseCivilDate(sp.to) ?? parseCivilDate(today)!
+  const fromStr = civilIso(fromCivil), toStr = civilIso(toCivil)
+  const { start, end } = spDayRange(fromCivil, toCivil)
   const skip = Math.max(0, Number(sp.skip) || 0)
 
   const filter: EventFilter = {
-    from: new Date(`${fromStr}T00:00:00`),
-    to: new Date(`${toStr}T23:59:59.999`),
+    from: start,
+    to: new Date(end.getTime() - 1),
     type: sp.type || undefined,
     employeeId: sp.employeeId ? Number(sp.employeeId) : undefined,
     q: sp.q || undefined,
@@ -54,7 +54,7 @@ async function Trail({ searchParams }: { searchParams: Promise<Record<string, st
   if (sp.q) qsBase.set('q', sp.q)
   const pageHref = (s: number) => { const p = new URLSearchParams(qsBase); p.set('skip', String(s)); return `/auditoria?${p}` }
 
-  const fmt = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const fmt = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ })
 
   return (
     <div className="grid gap-6">

@@ -1,8 +1,8 @@
 import type { ShiftReport } from '@/server/data/shifts'
 import { MOTEL_NAME } from '@/lib/config'
+import { formatHm as hm } from '@/lib/time'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const hm = (d: Date | null) => (d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—')
 const periodLabel = (p: string) => (p === 'day_07_19' ? 'Diurno (07–19)' : 'Noturno (19–07)')
 
 export function ShiftReceipt({ data }: { data: ShiftReport }) {
@@ -16,7 +16,7 @@ export function ShiftReceipt({ data }: { data: ShiftReport }) {
       <div className="t-row t-small t-bold"><span>Apto</span><span>Entra/Saída</span><span>Est/Cons</span></div>
       {data.lines.map((l, i) => (
         <div className="t-row t-small" key={i}>
-          <span>{l.room}</span>
+          <span>{l.walkin ? 'Avulso' : l.room}</span>
           <span>{hm(l.checkIn)}–{hm(l.checkOut)}</span>
           <span className="tnum">{brl(l.stayAmount)}/{brl(l.consumptionAmount)}</span>
         </div>

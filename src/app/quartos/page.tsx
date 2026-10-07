@@ -32,7 +32,7 @@ async function Board() {
   ])
   let currentShiftId: string | null = null
   let shiftSaldo = 0, retiradoDinheiro = 0, retiradoCartao = 0
-  if (sum && !sum.closed && sum.shift && sum.metrics) {
+  if (sum) {
     currentShiftId = String(sum.shift.id)
     shiftSaldo = sum.metrics.saldo; retiradoDinheiro = sum.metrics.retiradoDinheiro; retiradoCartao = sum.metrics.retiradoCartao
   }

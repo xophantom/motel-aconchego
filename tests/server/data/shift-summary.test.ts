@@ -12,7 +12,6 @@ describe('currentShiftSummary', () => {
   it('auto-opens the current shift when viewing', async () => {
     const s = await currentShiftSummary()
     expect(s.shift).not.toBeNull()
-    expect(s.closed).toBe(false)
     expect(s.metrics).not.toBeNull()
   })
 })

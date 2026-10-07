@@ -2,16 +2,14 @@
 import { revalidatePath } from 'next/cache'
 import { entrySchema, costCenterSchema } from '@/lib/validation/finance'
 import * as finance from '@/server/data/finance'
+import { parseCivilDate } from '@/lib/time'
 
 export type ActionState = { ok: boolean; error?: string }
 
 const permErr = (e: unknown) => (e instanceof Error && /forbidden/i.test(e.message) ? 'Sem permissão.' : 'Erro ao salvar.')
 
-// 'YYYY-MM-DD' → local midnight Date (avoids the UTC shift of new Date('YYYY-MM-DD'))
-function civilDate(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
+// 'YYYY-MM-DD' (validated by entrySchema) → civil date for the @db.Date column
+const civilDate = (s: string) => parseCivilDate(s)!
 
 export async function createEntryAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const parsed = entrySchema.safeParse({

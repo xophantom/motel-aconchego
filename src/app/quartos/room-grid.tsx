@@ -10,8 +10,9 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
 import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
+import { formatHm } from '@/lib/time'
 import { CloseTurnoButton } from './close-turno'
-import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, cancelCheckInAction, cancelCheckOutAction, type ActionState } from './actions'
+import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, editCheckInAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
@@ -108,7 +109,9 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
   const [view, setView] = useState(room.status)
   const [dialogStay, setDialogStay] = useState(room.currentStay)
   useEffect(() => { if (!open) { setView(room.status); setDialogStay(room.currentStay) } }, [open, room.status, room.currentStay])
-  const dialogRoom = { ...room, status: view, currentStay: dialogStay }
+  // Same stay still on the room → show its live data (prepaid/entry-time edits).
+  const sameStay = room.currentStay && dialogStay && room.currentStay.id === dialogStay.id
+  const dialogRoom = { ...room, status: view, currentStay: sameStay ? room.currentStay : dialogStay }
   return (
     <Dialog open={open} onOpenChange={(o) => { if (o) { setView(room.status); setDialogStay(room.currentStay) } setOpen(o) }}>
       <DialogTrigger asChild>
@@ -208,7 +211,14 @@ export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { r
             <span className="tnum font-medium">Período {money(t.base)} · Pernoite {money(t.overnight)}</span>
           </div>
         )}
-        <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
+          <div className="grid gap-1">
+            <Label htmlFor="checkInTime">Horário de entrada</Label>
+            <Input id="checkInTime" name="checkInTime" type="time" />
+            <span className="text-[11px] text-muted-foreground">vazio = agora · use se esqueceu de dar entrada</span>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1"><Label htmlFor="guests">Hóspedes</Label><Input id="guests" name="guests" type="number" min="1" defaultValue="2" /></div>
           <div className="grid gap-1"><Label htmlFor="prepaidAmount">Antecipado (R$)</Label><Input id="prepaidAmount" name="prepaidAmount" type="number" step="0.01" defaultValue="0" /></div>
@@ -258,9 +268,12 @@ function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; prod
           )}
         </Section>
       )}
+      <Section title="Pagamento antecipado" right={<span className="tnum text-sm font-medium">{money(stay.prepaid)}</span>}>
+        <AddPrepaid roomNumber={room.number} />
+      </Section>
       <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Fechamento · {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · ⏱ {elapsedLabel(stay.checkIn, now)}
+          Fechamento · {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · entrada {formatHm(new Date(stay.checkIn))} · ⏱ {elapsedLabel(stay.checkIn, now)}
         </div>
         <Row label="Estadia (estimada)" value={estadia != null ? money(estadia) : '—'} />
         <Row label="Consumo" value={money(consumoTotal)} />
@@ -272,8 +285,38 @@ function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; prod
         <p className="mt-1 text-xs text-muted-foreground">Valor final confirmado no servidor.</p>
       </div>
       <CheckOut roomNumber={room.number} stayId={stay.id} onDone={onDone} />
+      <EditEntryTime roomNumber={room.number} checkIn={stay.checkIn} />
       {canCancel && <CancelEntry roomNumber={room.number} onDone={onDone} />}
     </div>
+  )
+}
+
+function AddPrepaid({ roomNumber }: { roomNumber: string }) {
+  const action = addPrepaidAction.bind(null, roomNumber)
+  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
+  return (
+    <form action={formAction} className="flex items-end gap-2">
+      <div className="grid gap-1"><Label htmlFor="prepaidMore" className="text-xs">Valor recebido (R$)</Label><Input id="prepaidMore" name="amount" type="number" step="0.01" min="0.01" required className="h-8 w-32" /></div>
+      <Button size="sm" variant="outline" type="submit">Lançar antecipado</Button>
+      {state.error && <span className="text-destructive text-xs">{state.error}</span>}
+    </form>
+  )
+}
+
+function EditEntryTime({ roomNumber, checkIn }: { roomNumber: string; checkIn: string }) {
+  const action = editCheckInAction.bind(null, roomNumber)
+  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
+  const current = formatHm(new Date(checkIn))
+  return (
+    <details className="rounded-xl border p-3">
+      <summary className="cursor-pointer text-sm font-medium">Corrigir horário de entrada <span className="tnum text-muted-foreground">({current})</span></summary>
+      <p className="mt-1 text-xs text-muted-foreground">Para quando a entrada foi registrada depois que o cliente chegou. Fica na auditoria.</p>
+      <form action={formAction} className="mt-2 flex gap-2">
+        <Input key={checkIn} name="checkInTime" type="time" defaultValue={current} required className="w-32" />
+        <Button variant="outline" type="submit">Salvar horário</Button>
+      </form>
+      {state.error && <p className="mt-1 text-destructive text-xs">{state.error}</p>}
+    </details>
   )
 }
 

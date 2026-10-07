@@ -222,7 +222,10 @@ model Shift {
   stays          Stay[]
   movements      CashMovement[]
 
-  @@unique([businessDate, period])
+  // Not unique: a shift runs until it is closed, and its (date, period) is just
+  // the label of the window it was opened for — an early/late close can repeat it.
+  @@index([businessDate, period])
+  @@index([closedAt])
   @@map("shift")
 }
 

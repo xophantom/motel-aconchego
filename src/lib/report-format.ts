@@ -1,3 +1,5 @@
+import { MOTEL_TZ } from '@/lib/time'
+
 export type CellKind = 'text' | 'int' | 'money' | 'datetime' | 'duration' | 'yesno'
 export type ReportColumn = { key: string; label: string; kind: CellKind; align?: 'right' }
 
@@ -10,7 +12,7 @@ export const REPORT_LABELS: Record<string, string> = {
 }
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const dtm = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+const dtm = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ })
 
 export function formatCell(value: unknown, kind: CellKind, style: 'csv' | 'screen' | 'pdf'): string {
   if (value == null || value === '') return style === 'screen' ? '—' : ''

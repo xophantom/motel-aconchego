@@ -40,4 +40,10 @@ describe('movementReport', () => {
     expect(r.totals.entries).toBe(2); expect(r.totals.exits).toBe(1)
     expect(r.totals.total).toBe(90) // 85 + 5
   })
+
+  it('days run on Brasília time, not UTC (a 23:30 BRT entry belongs to that day)', async () => {
+    await db.stay.create({ data: { type: 'room', roomNumber: '01', checkIn: new Date('2026-07-04T23:30:00-03:00'), status: 'open', day: 'normal', guests: 2, entryEmployeeId: 1 } })
+    expect((await movementReport(at(2026, 7, 4), at(2026, 7, 4))).rows).toHaveLength(1)
+    expect((await movementReport(at(2026, 7, 5), at(2026, 7, 5))).rows).toHaveLength(0)
+  })
 })

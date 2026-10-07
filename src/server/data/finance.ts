@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { logEvent } from '@/server/audit'
 import { Prisma, type LedgerKind } from '@/generated/prisma/client'
+import { addCivilDays, civilDate, civilIso, spDayRange, toCivil } from '@/lib/time'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -109,19 +110,13 @@ export type DailyStatement = {
   net: number
 }
 
-function civilDayBounds(date: Date) {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
-  return { start, end }
-}
-
-function isoDate(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
 
 export async function dailyStatement(date: Date): Promise<DailyStatement> {
   await requireFinance()
-  const { start, end } = civilDayBounds(date)
+  date = toCivil(date)
+  // timestamps use the Brasília day; the @db.Date ledger column the civil date itself
+  const { start, end } = spDayRange(date, date)
+  const nextDay = addCivilDays(date, 1)
 
   const roomStays = await db.stay.findMany({
     where: { type: 'room', status: 'closed', checkOut: { gte: start, lt: end } },
@@ -149,7 +144,7 @@ export async function dailyStatement(date: Date): Promise<DailyStatement> {
   }
 
   const entries = await db.ledgerEntry.findMany({
-    where: { entryDate: { gte: start, lt: end } },
+    where: { entryDate: { gte: date, lt: nextDay } },
     select: { kind: true, amount: true },
   })
   let expenses = 0
@@ -161,7 +156,7 @@ export async function dailyStatement(date: Date): Promise<DailyStatement> {
 
   const net = cashIn - cashOut + income - expenses
   return {
-    date: isoDate(date),
+    date: civilIso(date),
     stays: round2(stays), consumption: round2(consumption),
     cashIn: round2(cashIn), cashOut: round2(cashOut),
     expenses: round2(expenses), income: round2(income), net: round2(net),
@@ -173,12 +168,10 @@ export type StatementRange = { days: DailyStatement[]; totals: DailyStatement }
 export async function statementRange(from: Date, to: Date): Promise<StatementRange> {
   await requireFinance()
   const days: DailyStatement[] = []
-  const cursor = new Date(from.getFullYear(), from.getMonth(), from.getDate())
-  const last = new Date(to.getFullYear(), to.getMonth(), to.getDate())
   // guard against an inverted or absurd range (cap at 366 iterations)
-  for (let i = 0; cursor <= last && i < 366; i++) {
-    days.push(await dailyStatement(new Date(cursor)))
-    cursor.setDate(cursor.getDate() + 1)
+  const last = toCivil(to)
+  for (let day = toCivil(from), i = 0; day <= last && i < 366; day = addCivilDays(day, 1), i++) {
+    days.push(await dailyStatement(day))
   }
   const totals = days.reduce<DailyStatement>((t, d) => ({
     date: '',
@@ -199,8 +192,8 @@ export async function costCenterMonthly(year: number, month: number): Promise<Co
   await requireFinance()
   month = Math.min(12, Math.max(1, Math.trunc(month)))
   year = Math.min(2100, Math.max(2000, Math.trunc(year)))
-  const start = new Date(year, month - 1, 1)
-  const end = new Date(year, month, 1)
+  const start = civilDate(year, month, 1)
+  const end = civilDate(year, month + 1, 1)
   const entries = await db.ledgerEntry.findMany({
     where: { entryDate: { gte: start, lt: end } },
     select: { kind: true, amount: true, costCenter: true, center: { select: { description: true } } },

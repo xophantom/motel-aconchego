@@ -1,17 +1,13 @@
 import { statementRange } from '@/server/data/finance'
 import { toFinanceCsv } from '@/lib/finance-csv'
+import { civilDate, parseCivilDate, todayCivil } from '@/lib/time'
 
-function civilDate(s: string | null, fallback: Date): Date {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return fallback
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
-  const now = new Date()
-  const from = civilDate(searchParams.get('from'), new Date(now.getFullYear(), now.getMonth(), 1))
-  const to = civilDate(searchParams.get('to'), now)
+  const today = todayCivil()
+  const from = parseCivilDate(searchParams.get('from')) ?? civilDate(today.getUTCFullYear(), today.getUTCMonth() + 1, 1)
+  const to = parseCivilDate(searchParams.get('to')) ?? today
   let range
   try { range = await statementRange(from, to) }
   catch (e) { if (e instanceof Error && /forbidden/i.test(e.message)) return new Response('Forbidden', { status: 403 }); throw e }

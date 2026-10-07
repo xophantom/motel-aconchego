@@ -51,6 +51,12 @@ describe('dailyStatement', () => {
     expect(s.income).toBe(15)
     expect(s.net).toBe(50)                  // (105 − 30) + 15 − 40 = 50
   })
+
+  it('a 22:00 BRT movement (01:00 UTC next day) counts on its Brasília day', async () => {
+    await db.cashMovement.create({ data: { type: 'stay', amount: 50, occurredAt: new Date('2026-07-04T22:00:00-03:00'), employeeId: 1 } })
+    expect((await dailyStatement(at(2026, 7, 4))).cashIn).toBe(50)
+    expect((await dailyStatement(at(2026, 7, 5))).cashIn).toBe(0)
+  })
 })
 
 describe('statementRange', () => {
