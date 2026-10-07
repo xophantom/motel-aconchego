@@ -6,4 +6,9 @@ describe('loyalty:manage', () => {
     expect(can('reception', 'loyalty:manage')).toBe(false)
     expect(can('housekeeper', 'loyalty:manage')).toBe(false)
   })
+  it('manager and reception can view the plates list', () => {
+    expect(can('manager', 'loyalty:view')).toBe(true)
+    expect(can('reception', 'loyalty:view')).toBe(true)
+    expect(can('housekeeper', 'loyalty:view')).toBe(false)
+  })
 })

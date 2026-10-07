@@ -18,6 +18,11 @@ async function requireUser() {
   if (!me) throw new Error('Forbidden')
   return me
 }
+async function requireLoyaltyViewer() {
+  const me = await getCurrentUser()
+  if (!me || !can(me.role, 'loyalty:view')) throw new Error('Forbidden')
+  return me
+}
 async function requireLoyaltyManager() {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'loyalty:manage')) throw new Error('Forbidden')
@@ -132,7 +137,7 @@ export type LoyaltyCustomerRow = LoyaltyStatus & { plate: string; totalVisits: n
 // Every plate with its loyalty progress, most recent visit first. Rows of the
 // same car (older spellings) are summed under the canonical plate.
 export async function listLoyaltyCustomers(q?: string): Promise<{ policy: LoyaltyPolicy; rows: LoyaltyCustomerRow[] }> {
-  await requireLoyaltyManager()
+  await requireLoyaltyViewer()
   const closedRoom = { customerId: { not: null }, type: 'room', status: 'closed' } as const
   const [policy, customers, visits, paid, used] = await Promise.all([
     getLoyaltyPolicy(),
@@ -172,7 +177,7 @@ export type LoyaltyVisit = {
 }
 
 export async function loyaltyCustomerDetail(plate: string): Promise<{ plate: string; status: LoyaltyStatus; visits: LoyaltyVisit[] } | null> {
-  await requireLoyaltyManager()
+  await requireLoyaltyViewer()
   const canon = normalizePlate(plate)
   const customers = canon ? await db.customer.findMany({ where: { plate: { in: plateVariants(canon) } }, select: { id: true } }) : []
   if (!customers.length) return null
