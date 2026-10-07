@@ -12,7 +12,7 @@ import { computeStayAmount } from '@/lib/billing'
 import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
 import { formatHm } from '@/lib/time'
 import { CloseTurnoButton } from './close-turno'
-import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyBenefitAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, editCheckInAction, type ActionState } from './actions'
+import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyLoyaltyAction, removeLoyaltyAction, setPlateAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, editCheckInAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
@@ -20,7 +20,7 @@ type Pricing = { billing: 'motel' | 'hotel'; minPeriodMin: number; maxPeriodMin:
 type DayTariff = { base: number; overnight: number }
 type Tariff = { normal: DayTariff; special: DayTariff }
 type Stay = { id: string; checkIn: string; guests: number; day: 'normal' | 'special'; chargeMode: 'period' | 'overnight'; prepaid: number; consumptionAmount: number; discountPercent: number }
-type Loyalty = { plate: string; visits: number; tiers: { id: number; minVisits: number; discountPercent: number }[]; appliedDiscount: number }
+type Loyalty = { plate: string; paidVisits: number; available: number; everyVisits: number; rewardPercent: number; nextIn: number; appliedDiscount: number }
 type Room = {
   number: string
   status: 'free' | 'occupied' | 'cleaning' | 'maintenance'
@@ -132,6 +132,7 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
             <div className="tnum mt-2.5 flex items-center gap-2 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
               <span>⏱ {elapsedLabel(room.currentStay.checkIn, now)}</span>
               <span>👤 {room.currentStay.guests}</span>
+              {room.loyalty && room.loyalty.available > 0 && room.loyalty.appliedDiscount === 0 && <span title="Benefício de fidelidade disponível">🎁</span>}
               {total != null && <span className="ml-auto font-semibold text-foreground">{money(total)}</span>}
             </div>
           )}
@@ -257,17 +258,7 @@ function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; prod
         </div>
         <AddConsumption stayId={stay.id} products={products} />
       </Section>
-      {room.loyalty && (
-        <Section title={`Fidelidade · ${room.loyalty.plate}`} right={<span className="text-xs text-muted-foreground">{room.loyalty.visits} visitas</span>}>
-          {room.loyalty.appliedDiscount > 0 ? (
-            <p className="text-sm font-medium text-[var(--room-free)]">Desconto aplicado: {room.loyalty.appliedDiscount}%</p>
-          ) : room.loyalty.tiers.length ? (
-            <div className="flex flex-wrap gap-2">{room.loyalty.tiers.map((t) => <ApplyBenefit key={t.id} roomNumber={room.number} tier={t} />)}</div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Sem benefício disponível ainda.</p>
-          )}
-        </Section>
-      )}
+      <LoyaltySection roomNumber={room.number} loyalty={room.loyalty} />
       <Section title="Pagamento antecipado" right={<span className="tnum text-sm font-medium">{money(stay.prepaid)}</span>}>
         <AddPrepaid roomNumber={room.number} />
       </Section>
@@ -411,12 +402,67 @@ function CheckOut({ roomNumber, stayId, onDone }: { roomNumber: string; stayId: 
   )
 }
 
-function ApplyBenefit({ roomNumber, tier }: { roomNumber: string; tier: { id: number; discountPercent: number } }) {
-  const [state, action] = useActionState<ActionState, FormData>(async () => applyBenefitAction(roomNumber, tier.id), { ok: false })
+const rewardLabel = (pct: number) => (pct >= 100 ? 'estadia grátis' : `${pct}% na estadia`)
+
+// Recurring loyalty: progress toward the next benefit, apply/undo it, and the
+// plate (typed at check-in, or added/fixed here while the stay is open).
+function LoyaltySection({ roomNumber, loyalty: l }: { roomNumber: string; loyalty: Loyalty | null }) {
+  if (!l) {
+    return (
+      <Section title="Fidelidade">
+        <p className="text-xs text-muted-foreground">Sem placa — informe para contar esta visita.</p>
+        <PlateForm roomNumber={roomNumber} />
+      </Section>
+    )
+  }
+  const done = l.everyVisits - l.nextIn
   return (
-    <form action={action} className="mt-1">
-      <Button size="sm" variant="secondary" type="submit">Aplicar {tier.discountPercent}%</Button>
-      {state.error && <span className="ml-2 text-destructive text-xs">{state.error}</span>}
+    <Section title={`Fidelidade · ${l.plate}`} right={<span className="tnum text-xs text-muted-foreground">{l.paidVisits} {l.paidVisits === 1 ? 'visita paga' : 'visitas pagas'}</span>}>
+      <div className="grid gap-2">
+        {l.appliedDiscount > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-[var(--room-free)]">🎁 Benefício aplicado: {rewardLabel(l.appliedDiscount)}</p>
+            <LoyaltyButton action={() => removeLoyaltyAction(roomNumber)} label="Remover" variant="ghost" />
+          </div>
+        ) : l.available > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">🎁 {l.available} {l.available === 1 ? 'benefício disponível' : 'benefícios disponíveis'}</p>
+            <LoyaltyButton action={() => applyLoyaltyAction(roomNumber)} label={`Aplicar ${rewardLabel(l.rewardPercent)}`} variant="secondary" />
+          </div>
+        ) : null}
+        <div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${(done / l.everyVisits) * 100}%` }} /></div>
+          <p className="tnum mt-1 text-xs text-muted-foreground">{done}/{l.everyVisits} · faltam {l.nextIn} {l.nextIn === 1 ? 'visita' : 'visitas'} para o próximo benefício ({rewardLabel(l.rewardPercent)})</p>
+        </div>
+        {l.appliedDiscount === 0 && (
+          <details>
+            <summary className="cursor-pointer text-xs text-muted-foreground">Corrigir placa</summary>
+            <PlateForm roomNumber={roomNumber} defaultValue={l.plate} />
+          </details>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function LoyaltyButton({ action, label, variant }: { action: () => Promise<ActionState>; label: string; variant: 'secondary' | 'ghost' }) {
+  const [state, formAction] = useActionState<ActionState, FormData>(async () => action(), { ok: false })
+  return (
+    <form action={formAction} className="flex items-center gap-2">
+      <Button size="sm" variant={variant} type="submit">{label}</Button>
+      {state.error && <span className="text-destructive text-xs">{state.error}</span>}
+    </form>
+  )
+}
+
+function PlateForm({ roomNumber, defaultValue }: { roomNumber: string; defaultValue?: string }) {
+  const action = setPlateAction.bind(null, roomNumber)
+  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
+  return (
+    <form action={formAction} className="mt-2 flex items-center gap-2">
+      <Input key={defaultValue} name="plate" placeholder="ABC1D23" defaultValue={defaultValue} className="h-8 w-32 uppercase" />
+      <Button size="sm" variant="outline" type="submit">Salvar placa</Button>
+      {state.error && <span className="text-destructive text-xs">{state.error}</span>}
     </form>
   )
 }

@@ -7,7 +7,7 @@ import { setRoomStatus } from '@/server/data/rooms'
 import type { RoomStatus } from '@/generated/prisma/client'
 import { addConsumptionSchema } from '@/lib/validation/product'
 import { addConsumption, removeConsumption, walkinSale } from '@/server/data/consumption'
-import { applyTierToRoom } from '@/server/data/loyalty'
+import { applyLoyaltyToRoom, removeLoyaltyFromRoom, setStayPlate } from '@/server/data/loyalty'
 
 export type ActionState = { ok: boolean; error?: string }
 
@@ -19,6 +19,9 @@ function mapErr(e: unknown): string {
     if (/reason/i.test(e.message)) return 'Manutenção exige um motivo.'
     if (/no open stay/i.test(e.message)) return 'Sem cliente na estadia.'
     if (/benefit unavailable/i.test(e.message)) return 'Benefício indisponível.'
+    if (/benefit already applied/i.test(e.message)) return 'Benefício já aplicado nesta estadia.'
+    if (/no benefit applied/i.test(e.message)) return 'Nenhum benefício aplicado.'
+    if (/benefit applied/i.test(e.message)) return 'Remova o benefício antes de trocar a placa.'
     if (/shift closed/i.test(e.message)) return 'Caixa fechado — só o gerente cancela.'
     if (/room reoccupied/i.test(e.message)) return 'Quarto já foi reocupado.'
     if (/no closed stay/i.test(e.message)) return 'Nada a cancelar.'
@@ -57,8 +60,21 @@ export async function editCheckInAction(roomNumber: string, _prev: ActionState, 
   return { ok: true }
 }
 
-export async function applyBenefitAction(roomNumber: string, tierId: number): Promise<ActionState> {
-  try { await applyTierToRoom(roomNumber, tierId) } catch (e) { return { ok: false, error: mapErr(e) } }
+export async function applyLoyaltyAction(roomNumber: string): Promise<ActionState> {
+  try { await applyLoyaltyToRoom(roomNumber) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function removeLoyaltyAction(roomNumber: string): Promise<ActionState> {
+  try { await removeLoyaltyFromRoom(roomNumber) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function setPlateAction(roomNumber: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const plate = String(fd.get('plate') ?? '').trim().slice(0, 20)
+  try { await setStayPlate(roomNumber, plate) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }
