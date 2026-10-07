@@ -76,6 +76,14 @@ describe('check-out', () => {
     const { stayAmount } = await checkOut('01')
     expect(stayAmount).toBe(80) // 160 overnight * 50% off
   })
+
+  it('a free stay (loyalty 100%) charges only consumption minus prepaid', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', chargeMode: 'overnight', guests: 2, prepaidAmount: 0 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: new Date(Date.now() - 30 * 60000), discountPercent: 100, consumptionAmount: 12 } })
+    const { stayAmount, balance } = await checkOut('01')
+    expect(stayAmount).toBe(0)
+    expect(balance).toBe(12)
+  })
 })
 
 describe('audit trail', () => {

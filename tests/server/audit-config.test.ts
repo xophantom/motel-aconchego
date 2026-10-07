@@ -5,13 +5,12 @@ vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current
 
 import { db } from '@/server/db'
 import { upsertProduct } from '@/server/data/products'
-import { upsertTier, deleteTier } from '@/server/data/loyalty'
+import { updateLoyaltyPolicy } from '@/server/data/loyalty'
 import { createEmployee } from '@/server/data/employees'
 import { updateCategory } from '@/server/data/tariff'
 
 beforeEach(async () => {
   await db.eventLog.deleteMany()
-  await db.loyaltyTier.deleteMany()
   await db.stockMovement.deleteMany(); await db.product.deleteMany()
   await db.rate.deleteMany()
   await db.roomCategory.deleteMany()
@@ -28,13 +27,9 @@ describe('config audit trail', () => {
     expect(ev[0].entityId).toBe('AGU')
   })
 
-  it('loyalty tier upsert + delete write loyalty.tier.* events', async () => {
-    const tier = await upsertTier({ minVisits: 5, discountPercent: 10 })
-    await deleteTier(tier.id)
-    const up = await db.eventLog.findMany({ where: { type: 'loyalty.tier.upsert' } })
-    const del = await db.eventLog.findMany({ where: { type: 'loyalty.tier.delete' } })
-    expect(up).toHaveLength(1)
-    expect(del).toHaveLength(1)
+  it('loyalty policy update writes loyalty.policy', async () => {
+    await updateLoyaltyPolicy({ everyVisits: 10, discountPercent: 100 })
+    expect(await db.eventLog.count({ where: { type: 'loyalty.policy' } })).toBe(1)
   })
 
   it('createEmployee writes user.create', async () => {

@@ -345,6 +345,7 @@ model EventLog {
   @@map("event_log")
 }
 
+// Legacy one-shot tiers (replaced by LoyaltyPolicy); kept for old redemptions.
 model LoyaltyTier {
   id              Int    @id @default(autoincrement())
   minVisits       Int    @unique @map("min_visits")
@@ -354,18 +355,30 @@ model LoyaltyTier {
   @@map("loyalty_tier")
 }
 
+// A loyalty benefit used on a stay (one per stay, enforced in the DAL). Earned
+// benefits are derived: floor(paid visits / everyVisits) − redemptions.
 model LoyaltyRedemption {
-  id         BigInt   @id @default(autoincrement())
-  customerId BigInt   @map("customer_id")
-  tierId     Int      @map("tier_id")
-  stayId     BigInt   @map("stay_id")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
-  customer   Customer    @relation(fields: [customerId], references: [id])
-  tier       LoyaltyTier @relation(fields: [tierId], references: [id])
-  stay       Stay        @relation(fields: [stayId], references: [id])
+  id              BigInt       @id @default(autoincrement())
+  customerId      BigInt       @map("customer_id")
+  tierId          Int?         @map("tier_id") // legacy
+  stayId          BigInt       @map("stay_id")
+  discountPercent Int          @default(0) @map("discount_percent")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  customer        Customer     @relation(fields: [customerId], references: [id])
+  tier            LoyaltyTier? @relation(fields: [tierId], references: [id])
+  stay            Stay         @relation(fields: [stayId], references: [id])
 
   @@unique([customerId, tierId])
+  @@index([stayId])
   @@map("loyalty_redemption")
+}
+
+// Recurring rule: every `everyVisits` paid visits earn `discountPercent` off one stay.
+model LoyaltyPolicy {
+  id              Int @id @default(1)
+  everyVisits     Int @default(10) @map("every_visits")
+  discountPercent Int @default(100) @map("discount_percent")
+  @@map("loyalty_policy")
 }
 
 model TariffPolicy {

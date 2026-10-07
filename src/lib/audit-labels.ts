@@ -22,6 +22,10 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   'user.reset': 'Senha redefinida',
   'loyalty.tier.upsert': 'Faixa fidelidade',
   'loyalty.tier.delete': 'Faixa removida',
+  'loyalty.policy': 'Regra fidelidade',
+  'loyalty.apply': 'Fidelidade aplicada',
+  'loyalty.remove': 'Fidelidade removida',
+  'stay.plate': 'Placa',
 }
 
 export function eventTypeLabel(type: string | null): string {

@@ -7,7 +7,8 @@ import { listProducts } from '@/server/data/products'
 import { listConsumptionForStays } from '@/server/data/consumption'
 import { listCategoriesForBoard, getTariffPolicy, listRegionalHolidays } from '@/server/data/tariff'
 import { resolveDay, civilDateInSaoPaulo } from '@/lib/tariff-day'
-import { availableTiers } from '@/server/data/loyalty'
+import { getLoyaltyPolicy, loyaltyStatus } from '@/server/data/loyalty'
+import { normalizePlate } from '@/lib/plate'
 import { getCurrentUser } from '@/server/session'
 import { currentShiftSummary } from '@/server/data/shifts'
 import { RoomGrid } from './room-grid'
@@ -22,13 +23,14 @@ async function Board() {
   const canCash = me?.role === 'manager' || me?.role === 'reception'
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
   // Independent reads: fetch them together instead of one round-trip after another.
-  const [products, canCancel, sum, policy, regional, allCons] = await Promise.all([
+  const [products, canCancel, sum, policy, regional, allCons, loyaltyPolicy] = await Promise.all([
     listProducts(),
     canCancelNow(),
     canCash ? currentShiftSummary().catch(() => null) : null,
     getTariffPolicy(),
     listRegionalHolidays(),
     listConsumptionForStays(openStayIds),
+    getLoyaltyPolicy(),
   ])
   let currentShiftId: string | null = null
   let shiftSaldo = 0, retiradoDinheiro = 0, retiradoCartao = 0
@@ -66,8 +68,8 @@ async function Board() {
     }
     let loyalty = null
     if (s?.customerId && s.customer?.plate) {
-      const av = await availableTiers(s.customerId, s.id)
-      loyalty = { plate: s.customer.plate, visits: av.visits, tiers: av.tiers.map((t) => ({ id: t.id, minVisits: t.minVisits, discountPercent: t.discountPercent })), appliedDiscount: s.discountPercent }
+      const st = await loyaltyStatus(s.customerId, { excludeStayId: s.id, policy: loyaltyPolicy })
+      loyalty = { plate: normalizePlate(s.customer.plate), paidVisits: st.paidVisits, available: st.available, everyVisits: st.everyVisits, rewardPercent: st.discountPercent, nextIn: st.nextIn, appliedDiscount: s.discountPercent }
     }
     return {
       number: r.number,
