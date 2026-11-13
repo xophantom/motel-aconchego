@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { MoneyInput } from '@/components/money-input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
 function Submit() { const { pending } = useFormStatus(); return <Button size="sm" disabled={pending}>{pending ? '…' : 'Registrar'}</Button> }
@@ -61,7 +62,7 @@ export function StockForm({ products }: { products: StockProduct[] }) {
             <NativeSelectOption value="correction">Correção</NativeSelectOption>
           </NativeSelect>
         </div>
-        <div className="grid gap-1"><Label htmlFor="unitCost" className="text-xs">Custo un. (opc.)</Label><Input id="unitCost" name="unitCost" type="number" step="0.01" min="0" className="w-28" /></div>
+        <div className="grid gap-1"><Label htmlFor="unitCost" className="text-xs">Custo un. (opc.)</Label><MoneyInput id="unitCost" name="unitCost" optional className="w-32" /></div>
         <div className="grid gap-1 flex-1 min-w-40"><Label htmlFor="note" className="text-xs">Obs. (opc.)</Label><Input id="note" name="note" /></div>
         <Submit />
         {state.error && <span className="text-destructive text-xs">{state.error}</span>}

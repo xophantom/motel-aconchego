@@ -3,6 +3,7 @@ import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { createEntryAction, deleteEntryAction, saveCostCenterAction, deleteCostCenterAction, type ActionState } from './actions'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/money-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -24,7 +25,7 @@ export function EntryForm({ centers }: { centers: { code: string; description: s
           <NativeSelectOption value="income">Receita</NativeSelectOption>
         </NativeSelect>
       </div>
-      <div className="grid gap-1"><Label htmlFor="amount" className="text-xs">Valor</Label><Input id="amount" name="amount" type="number" step="0.01" min="0.01" className="w-28" required /></div>
+      <div className="grid gap-1"><Label htmlFor="amount" className="text-xs">Valor</Label><MoneyInput id="amount" name="amount" optional required className="w-36" /></div>
       <div className="grid gap-1">
         <Label htmlFor="costCenter" className="text-xs">Centro</Label>
         <NativeSelect id="costCenter" name="costCenter" defaultValue="" className="w-40">

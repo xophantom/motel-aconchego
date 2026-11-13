@@ -2,7 +2,7 @@
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { updateRateAction, type ActionState } from './actions'
-import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/money-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 
@@ -36,7 +36,7 @@ function Field({ name, label, defaultValue }: { name: string; label: string; def
   return (
     <div className="grid gap-1">
       <Label htmlFor={name} className="text-xs">{label}</Label>
-      <Input id={name} name={name} type="number" step="0.01" defaultValue={defaultValue} className="w-24 h-8" />
+      <MoneyInput id={name} name={name} defaultValue={defaultValue} className="w-28 h-8" />
     </div>
   )
 }
