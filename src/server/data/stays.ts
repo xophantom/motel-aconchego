@@ -131,14 +131,20 @@ export async function setStayPlate(roomNumber: string, raw: string) {
   return updated
 }
 
-export async function checkOut(roomNumber: string) {
+// `checkOutTime` ("HH:MM", Brasília) is the real exit when the checkout is
+// registered late (forgot to do it on time): billing runs until then. It's the
+// most recent such time not after now, and never before the entry. The money
+// is still received now, in the current shift.
+export async function checkOut(roomNumber: string, checkOutTime?: string) {
   const me = await requireOps()
   const room = await db.room.findUniqueOrThrow({ where: { number: roomNumber }, include: { currentStay: true, category: true } })
   if (room.status !== 'occupied' || !room.currentStay || !room.category) throw new Error('Room is not occupied')
   const stay = room.currentStay
   const cat = room.category
   const rate = await db.rate.findUniqueOrThrow({ where: { categoryId_day: { categoryId: cat.id, day: stay.day } } })
-  const checkOutAt = new Date()
+  const now = new Date()
+  const checkOutAt = checkOutTime ? resolveEntryTime(checkOutTime, now) : now
+  if (checkOutAt < stay.checkIn) throw new Error('exit before entry')
   const rawStayAmount = computeStayAmount({
     billing: cat.billing,
     chargeMode: stay.chargeMode,
@@ -162,13 +168,13 @@ export async function checkOut(roomNumber: string) {
   await db.$transaction(async (tx) => {
     await tx.stay.update({ where: { id: stay.id }, data: { checkOut: checkOutAt, stayAmount, status: 'closed', paymentEmployeeId: me.id, shiftId: openShiftId } })
     await tx.cashMovement.create({
-      data: { type: 'stay', stayId: stay.id, amount: balance, employeeId: me.id, shiftId: openShiftId, occurredAt: checkOutAt, description: `Saída quarto ${roomNumber}` },
+      data: { type: 'stay', stayId: stay.id, amount: balance, employeeId: me.id, shiftId: openShiftId, occurredAt: now, description: `Saída quarto ${roomNumber}` },
     })
     await tx.room.update({ where: { number: roomNumber }, data: { status: 'cleaning', currentStayId: null } })
   })
   await logEvent({
     type: 'stay.checkout',
-    description: `Saída quarto ${roomNumber} · R$ ${balance.toFixed(2)}`,
+    description: `Saída quarto ${roomNumber} · R$ ${balance.toFixed(2)}${checkOutAt !== now ? ` · horário de saída informado ${formatHm(checkOutAt)}` : ''}`,
     entity: 'stay',
     entityId: String(stay.id),
     roomNumber,

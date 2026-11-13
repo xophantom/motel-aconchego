@@ -40,6 +40,17 @@ describe('rooms DAL', () => {
   it('cannot set occupied directly', async () => {
     await expect(setRoomStatus('01', 'occupied')).rejects.toThrow(/check-in/i)
   })
+  it('an occupied room only leaves through checkout, not a status change', async () => {
+    await db.room.update({ where: { number: '01' }, data: { status: 'occupied' } })
+    session.current = { id: 2, name: 'Cam', role: 'housekeeper' }
+    await expect(setRoomStatus('01', 'cleaning')).rejects.toThrow(/occupied/i)
+    await expect(setRoomStatus('01', 'free')).rejects.toThrow(/occupied/i)
+    expect((await db.room.findUniqueOrThrow({ where: { number: '01' } })).status).toBe('occupied')
+  })
+  it('housekeeper puts a free room into cleaning', async () => {
+    session.current = { id: 2, name: 'Cam', role: 'housekeeper' }
+    expect((await setRoomStatus('01', 'cleaning')).status).toBe('cleaning')
+  })
 })
 
 describe('audit trail', () => {

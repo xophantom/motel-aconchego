@@ -4,8 +4,10 @@ import { can } from '@/lib/rbac'
 describe('can', () => {
   it('manager can manage users', () => { expect(can('manager', 'users:manage')).toBe(true) })
   it('reception cannot manage users', () => { expect(can('reception', 'users:manage')).toBe(false) })
-  it('housekeeper can only change room status', () => {
+  it('housekeeper changes room status and launches consumption, nothing else', () => {
     expect(can('housekeeper', 'room:status')).toBe(true)
+    expect(can('housekeeper', 'consumption:add')).toBe(true)
+    expect(can('housekeeper', 'stay:manage')).toBe(false)
     expect(can('housekeeper', 'users:manage')).toBe(false)
     expect(can('housekeeper', 'cash:withdraw')).toBe(false)
   })

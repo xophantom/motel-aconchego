@@ -1,6 +1,6 @@
 'use server'
 import { revalidatePath } from 'next/cache'
-import { checkInSchema, addPrepaidSchema, editCheckInSchema } from '@/lib/validation/stay'
+import { checkInSchema, addPrepaidSchema, editCheckInSchema, checkOutSchema } from '@/lib/validation/stay'
 import { z } from 'zod'
 import * as stays from '@/server/data/stays'
 import { setRoomStatus } from '@/server/data/rooms'
@@ -29,6 +29,8 @@ function mapErr(e: unknown): string {
     if (/entry time too old/i.test(e.message)) return 'Horário de entrada muito antigo (máx. 12h).'
     if (/before previous checkout/i.test(e.message)) return 'Horário anterior à última saída deste quarto.'
     if (/invalid entry time/i.test(e.message)) return 'Horário inválido.'
+    if (/exit before entry/i.test(e.message)) return 'Horário de saída antes da entrada.'
+    if (/room is occupied/i.test(e.message)) return 'Quarto ocupado: libere pela saída.'
   }
   return 'Erro ao processar.'
 }
@@ -86,8 +88,10 @@ export async function setCodenameAction(roomNumber: string, _prev: ActionState, 
   return { ok: true }
 }
 
-export async function checkOutAction(roomNumber: string): Promise<ActionState> {
-  try { await stays.checkOut(roomNumber) } catch (e) { return { ok: false, error: mapErr(e) } }
+export async function checkOutAction(roomNumber: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const parsed = checkOutSchema.safeParse({ checkOutTime: fd.get('checkOutTime') || undefined })
+  if (!parsed.success) return { ok: false, error: 'Horário de saída inválido (HH:MM).' }
+  try { await stays.checkOut(roomNumber, parsed.data.checkOutTime) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
   return { ok: true }
 }

@@ -207,3 +207,25 @@ describe('plate of an occupied room', () => {
     await expect(setStayPlate('01', 'ABC1D23')).rejects.toThrow(/not occupied/)
   })
 })
+
+describe('check-out with a typed exit time (forgot to check out on time)', () => {
+  it('bills until the typed exit; the money still comes in now; audited', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: minutesAgo(360) } })
+    const typed = formatHm(minutesAgo(180)) // left after ~3h (base period), not 6h
+    const before = Date.now()
+    const { stayAmount } = await checkOut('01', typed)
+    expect(stayAmount).toBe(75) // until now it would be the overnight cap (160)
+    const closed = await db.stay.findUniqueOrThrow({ where: { id: stay.id } })
+    expect(formatHm(closed.checkOut!)).toBe(typed)
+    const mov = await db.cashMovement.findFirstOrThrow({ where: { stayId: stay.id } })
+    expect(mov.occurredAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect((await db.eventLog.findFirstOrThrow({ where: { type: 'stay.checkout' } })).description).toContain(`horário de saída informado ${typed}`)
+  })
+  it('rejects an exit before the entry', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    await db.stay.update({ where: { id: stay.id }, data: { checkIn: minutesAgo(60) } })
+    await expect(checkOut('01', formatHm(minutesAgo(90)))).rejects.toThrow(/exit before entry/)
+    expect((await db.room.findUniqueOrThrow({ where: { number: '01' } })).status).toBe('occupied')
+  })
+})

@@ -10,10 +10,10 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
 import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
-import { formatHm } from '@/lib/time'
+import { formatHm, resolveEntryTime } from '@/lib/time'
 import { CodenameInput } from '@/components/codename-input'
 import { CloseTurnoButton } from './close-turno'
-import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyLoyaltyAction, removeLoyaltyAction, setPlateAction, setCodenameAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, editCheckInAction, type ActionState } from './actions'
+import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyLoyaltyAction, removeLoyaltyAction, setPlateAction, setCodenameAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
@@ -58,7 +58,10 @@ function estimateStay(stay: Stay, pricing: Pricing, now: number): number {
   return base * (1 - stay.discountPercent / 100)
 }
 
-export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedReason, currentShiftId, canCash, shiftSaldo, retiradoDinheiro, retiradoCartao }: { rooms: Room[]; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason; currentShiftId: string | null; canCash: boolean; shiftSaldo: number; retiradoDinheiro: number; retiradoCartao: number }) {
+// canOps (stay:manage) = reception/manager: check-in, checkout, prepaid,
+// loyalty… Without it (housekeeper) the room dialog only launches consumption on
+// occupied rooms and moves rooms between free and cleaning.
+export function RoomGrid({ rooms, products, canOps, canCancel, suggestedDay, suggestedReason, currentShiftId, canCash, shiftSaldo, retiradoDinheiro, retiradoCartao }: { rooms: Room[]; products: Product[]; canOps: boolean; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason; currentShiftId: string | null; canCash: boolean; shiftSaldo: number; retiradoDinheiro: number; retiradoCartao: number }) {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -71,11 +74,11 @@ export function RoomGrid({ rooms, products, canCancel, suggestedDay, suggestedRe
             </>
           )}
           <Button asChild variant="outline"><a href="/quartos/status?auto=1" target="_blank" rel="noopener">Imprimir status</a></Button>
-          <VendaAvulsa products={products} />
+          {canOps && <VendaAvulsa products={products} />}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} canCancel={canCancel} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />)}
+        {rooms.map((r) => <RoomCard key={r.number} room={r} products={products} canOps={canOps} canCancel={canCancel} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />)}
       </div>
     </div>
   )
@@ -95,7 +98,7 @@ function Legend() {
   )
 }
 
-function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: { room: Room; products: Product[]; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
+function RoomCard({ room, products, canOps, canCancel, suggestedDay, suggestedReason }: { room: Room; products: Product[]; canOps: boolean; canCancel: boolean; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
   const [open, setOpen] = useState(false)
   const occupied = room.status === 'occupied' && room.currentStay
   const now = useNow(!!occupied)
@@ -104,8 +107,8 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
   // While the dialog is open, freeze the room snapshot it renders (status +
   // currentStay). Otherwise a revalidation that flips the room mid-action
   // (free→occupied on check-in, occupied→cleaning on checkout) swaps the panel
-  // out and unmounts its onDone/print effect, leaving the modal stuck open on
-  // the next step. Consumption/pricing stay live (spread) so the list still
+  // out and unmounts its onDone effect, leaving the modal stuck open on the
+  // next step. Consumption/pricing stay live (spread) so the list still
   // updates in place while the modal is open.
   const [view, setView] = useState(room.status)
   const [dialogStay, setDialogStay] = useState(room.currentStay)
@@ -147,8 +150,12 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
             <Badge variant="secondary" className="ml-auto mr-2">{STATUS_LABEL[dialogRoom.status]}</Badge>
           </DialogTitle>
         </DialogHeader>
-        {dialogRoom.status === 'free' && <FreeActions room={dialogRoom} onDone={() => setOpen(false)} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />}
-        {dialogRoom.status === 'occupied' && dialogRoom.currentStay && <OccupiedPanel room={dialogRoom} products={products} canCancel={canCancel} onDone={() => setOpen(false)} />}
+        {dialogRoom.status === 'free' && (canOps
+          ? <FreeActions room={dialogRoom} onDone={() => setOpen(false)} suggestedDay={suggestedDay} suggestedReason={suggestedReason} />
+          : <SimpleStatus number={room.number} status="cleaning" label="Colocar em limpeza" onDone={() => setOpen(false)} />)}
+        {dialogRoom.status === 'occupied' && dialogRoom.currentStay && (canOps
+          ? <OccupiedPanel room={dialogRoom} products={products} canCancel={canCancel} onDone={() => setOpen(false)} />
+          : <ConsumptionSection stayId={dialogRoom.currentStay.id} items={dialogRoom.consumption} products={products} canRemove={false} />)}
         {dialogRoom.status === 'cleaning' && <SimpleStatus number={room.number} status="free" label="Liberar (limpo)" onDone={() => setOpen(false)} />}
         {dialogRoom.status === 'maintenance' && (
           <div className="grid gap-2">
@@ -164,9 +171,9 @@ function RoomCard({ room, products, canCancel, suggestedDay, suggestedReason }: 
   )
 }
 
-function Submit({ children, className }: { children: React.ReactNode; className?: string }) {
+function Submit({ children, className, variant }: { children: React.ReactNode; className?: string; variant?: 'outline' }) {
   const { pending } = useFormStatus()
-  return <Button disabled={pending} className={className}>{pending ? '…' : children}</Button>
+  return <Button disabled={pending} className={className} variant={variant}>{pending ? '…' : children}</Button>
 }
 
 function Section({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
@@ -239,43 +246,71 @@ export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { r
         {state.error && <p className="text-destructive text-sm">{state.error}</p>}
       </form>
       <MaintenanceForm number={room.number} onDone={onDone} />
+      <SimpleStatus number={room.number} status="cleaning" label="Colocar em limpeza" variant="outline" onDone={onDone} />
     </div>
   )
+}
+
+// Items on the room and the form to launch more. Removing an item is for
+// reception/manager only (canRemove); housekeepers just launch.
+function ConsumptionSection({ stayId, items, products, canRemove }: { stayId: string; items: ConsItem[]; products: Product[]; canRemove: boolean }) {
+  const consumoTotal = items.reduce((a, c) => a + c.unitPrice * c.qty, 0)
+  return (
+    <Section title="Consumo" right={<span className="tnum text-sm font-medium">{money(consumoTotal)}</span>}>
+      <div className="grid gap-1.5">
+        {items.length === 0 && <p className="text-xs text-muted-foreground">Nenhum item lançado.</p>}
+        {items.map((c) => (
+          <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+            <span className="flex items-center gap-2">
+              <span className="tnum rounded-md bg-secondary px-1.5 py-0.5 text-xs font-semibold">{c.qty}×</span>
+              {c.description}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="tnum text-muted-foreground">{money(c.unitPrice * c.qty)}</span>
+              {canRemove && <RemoveItem id={c.id} />}
+            </span>
+          </div>
+        ))}
+      </div>
+      <AddConsumption stayId={stayId} products={products} />
+    </Section>
+  )
+}
+
+// The exit time follows the clock until typed (checkout registered late): the
+// estimate and the server's billing then run until it. Same HH:MM resolution as
+// the server (most recent such time not after now).
+function exitInstant(exitTime: string | null, now: number): number {
+  if (!exitTime) return now
+  try { return resolveEntryTime(exitTime, new Date(now)).getTime() } catch { return now }
 }
 
 function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; products: Product[]; canCancel: boolean; onDone: () => void }) {
   const stay = room.currentStay!
   const now = useNow(true)
+  const [exitTime, setExitTime] = useState<string | null>(null)
+  const exitAt = exitInstant(exitTime, now)
+  const exitBeforeEntry = exitAt < new Date(stay.checkIn).getTime()
   const consumoTotal = room.consumption.reduce((a, c) => a + c.unitPrice * c.qty, 0)
-  const estadia = room.pricing ? estimateStay(stay, room.pricing, now) : null
+  const estadia = room.pricing ? estimateStay(stay, room.pricing, exitAt) : null
   const total = estadia != null ? estadia + consumoTotal - stay.prepaid : null
   return (
     <div className="grid gap-3">
-      <Section title="Consumo" right={<span className="tnum text-sm font-medium">{money(consumoTotal)}</span>}>
-        <div className="grid gap-1.5">
-          {room.consumption.length === 0 && <p className="text-xs text-muted-foreground">Nenhum item lançado.</p>}
-          {room.consumption.map((c) => (
-            <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex items-center gap-2">
-                <span className="tnum rounded-md bg-secondary px-1.5 py-0.5 text-xs font-semibold">{c.qty}×</span>
-                {c.description}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="tnum text-muted-foreground">{money(c.unitPrice * c.qty)}</span>
-                <RemoveItem id={c.id} />
-              </span>
-            </div>
-          ))}
-        </div>
-        <AddConsumption stayId={stay.id} products={products} />
-      </Section>
+      <ConsumptionSection stayId={stay.id} items={room.consumption} products={products} canRemove />
       <LoyaltySection roomNumber={room.number} loyalty={room.loyalty} />
       <Section title="Pagamento antecipado" right={<span className="tnum text-sm font-medium">{money(stay.prepaid)}</span>}>
         <AddPrepaid roomNumber={room.number} />
       </Section>
       <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Fechamento · {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · entrada {formatHm(new Date(stay.checkIn))} · ⏱ {elapsedLabel(stay.checkIn, now)}
+          Fechamento · {stay.chargeMode === 'overnight' ? 'Pernoite' : 'Período'} · entrada {formatHm(new Date(stay.checkIn))} · ⏱ {elapsedLabel(stay.checkIn, exitAt)}
+        </div>
+        <div className="mb-2 grid gap-1">
+          <Label htmlFor="checkOutTime" className="text-xs">Horário de saída</Label>
+          <Input id="checkOutTime" type="time" value={exitTime ?? formatHm(new Date(now))} onChange={(e) => setExitTime(e.target.value || null)} className="h-8 w-32" />
+          <span className={`text-[11px] ${exitBeforeEntry ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {exitBeforeEntry ? 'antes da entrada: confira o horário' : exitTime === null ? 'agora · altere se esqueceu de dar a saída na hora' : 'horário informado · a estadia é cobrada até ele'}
+          </span>
         </div>
         <Row label="Estadia (estimada)" value={estadia != null ? money(estadia) : '—'} />
         <Row label="Consumo" value={money(consumoTotal)} />
@@ -286,8 +321,7 @@ function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; prod
         </div>
         <p className="mt-1 text-xs text-muted-foreground">Valor final confirmado no servidor.</p>
       </div>
-      <CheckOut roomNumber={room.number} stayId={stay.id} onDone={onDone} />
-      <EditEntryTime roomNumber={room.number} checkIn={stay.checkIn} />
+      <CheckOut roomNumber={room.number} exitTime={exitTime} onDone={onDone} />
       <EditPlate roomNumber={room.number} plate={stay.plate} />
       {canCancel && <CancelEntry roomNumber={room.number} onDone={onDone} />}
     </div>
@@ -303,23 +337,6 @@ function AddPrepaid({ roomNumber }: { roomNumber: string }) {
       <Button size="sm" variant="outline" type="submit">Lançar antecipado</Button>
       {state.error && <span className="text-destructive text-xs">{state.error}</span>}
     </form>
-  )
-}
-
-function EditEntryTime({ roomNumber, checkIn }: { roomNumber: string; checkIn: string }) {
-  const action = editCheckInAction.bind(null, roomNumber)
-  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
-  const current = formatHm(new Date(checkIn))
-  return (
-    <details className="rounded-xl border p-3">
-      <summary className="cursor-pointer text-sm font-medium">Corrigir horário de entrada <span className="tnum text-muted-foreground">({current})</span></summary>
-      <p className="mt-1 text-xs text-muted-foreground">Para quando a entrada foi registrada depois que o cliente chegou. Fica na auditoria.</p>
-      <form action={formAction} className="mt-2 flex gap-2">
-        <Input key={checkIn} name="checkInTime" type="time" defaultValue={current} required className="w-32" />
-        <Button variant="outline" type="submit">Salvar horário</Button>
-      </form>
-      {state.error && <p className="mt-1 text-destructive text-xs">{state.error}</p>}
-    </details>
   )
 }
 
@@ -385,29 +402,14 @@ function RemoveItem({ id }: { id: string }) {
   return <form action={action}><Button size="icon" variant="ghost" type="submit" className="size-6 text-muted-foreground hover:text-destructive" aria-label="Remover item">×</Button></form>
 }
 
-// Print the checkout ticket without keeping the modal open. Try a popup first;
-// when it's blocked (common on the reception tablet) fall back to a hidden
-// same-origin iframe that auto-prints itself.
-function printTicket(stayId: string) {
-  const url = `/ticket/${stayId}?auto=1`
-  const w = window.open(url, 'ticket', 'width=380,height=640')
-  if (w) return
-  const iframe = document.createElement('iframe')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  iframe.src = url
-  document.body.appendChild(iframe)
-  setTimeout(() => iframe.remove(), 60000)
-}
-
-function CheckOut({ roomNumber, stayId, onDone }: { roomNumber: string; stayId: string; onDone: () => void }) {
-  const [state, formAction] = useActionState<ActionState, FormData>(async () => checkOutAction(roomNumber), { ok: false })
-  useEffect(() => {
-    if (!state.ok) return
-    printTicket(stayId)
-    onDone() // always close the modal after the action
-  }, [state.ok, stayId, onDone])
+// No ticket printed on checkout (Lúcio, 2026-11-13); the modal just closes.
+function CheckOut({ roomNumber, exitTime, onDone }: { roomNumber: string; exitTime: string | null; onDone: () => void }) {
+  const action = checkOutAction.bind(null, roomNumber)
+  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
+  useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
   return (
     <form action={formAction} className="grid gap-2">
+      <input type="hidden" name="checkOutTime" value={exitTime ?? ''} />
       <Submit className="w-full">Confirmar saída</Submit>
       {state.error && <p className="mt-1 text-destructive text-sm">{state.error}</p>}
     </form>
@@ -496,13 +498,13 @@ function EditPlate({ roomNumber, plate }: { roomNumber: string; plate: string | 
   )
 }
 
-function SimpleStatus({ number, status, label, onDone }: { number: string; status: 'free' | 'cleaning'; label: string; onDone: () => void }) {
+function SimpleStatus({ number, status, label, onDone, variant }: { number: string; status: 'free' | 'cleaning'; label: string; onDone: () => void; variant?: 'outline' }) {
   const [state, action] = useActionState<ActionState, FormData>(setRoomStatusAction, { ok: false })
   useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
   return (
     <form action={action}>
       <input type="hidden" name="number" value={number} /><input type="hidden" name="status" value={status} />
-      <Submit>{label}</Submit>{state.error && <p className="text-destructive text-sm">{state.error}</p>}
+      <Submit variant={variant}>{label}</Submit>{state.error && <p className="text-destructive text-sm">{state.error}</p>}
     </form>
   )
 }
