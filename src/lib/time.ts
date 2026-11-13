@@ -84,3 +84,8 @@ export function formatHm(d: Date | null | undefined): string {
 export function formatDayHm(d: Date | null | undefined): string {
   return d ? d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ }).replace(',', '') : '—'
 }
+
+// With the year, for dates that may be from other years (old-system visits).
+export function formatDayYearHm(d: Date | null | undefined): string {
+  return d ? d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ }).replace(',', '') : '—'
+}

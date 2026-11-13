@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { listLoyaltyCustomers, loyaltyCustomerDetail, type LoyaltyVisit } from '@/server/data/loyalty'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
-import { formatDayHm } from '@/lib/time'
+import { formatDayHm, formatDayYearHm } from '@/lib/time'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +18,7 @@ import { CodenameManage } from './codename-forms'
 const MAX_ROWS = 200
 const money = (n: number | null) => (n == null ? '—' : `R$ ${n.toFixed(2)}`)
 const rewardLabel = (pct: number) => (pct >= 100 ? '1 estadia grátis' : `${pct}% numa estadia`)
-const lastVisitLabel = (d: Date | null) => (d ? formatDayHm(d) : '—')
+const lastVisitLabel = (d: Date | null) => formatDayYearHm(d) // may be an old-system visit from another year
 
 type SP = { q?: string; c?: string }
 
@@ -125,7 +125,14 @@ function DetailCard({ detail, closeHref, canManage }: { detail: NonNullable<Awai
             </TableRow>
           </TableHeader>
           <TableBody>
-            {detail.visits.map((v) => (
+            {detail.visits.map((v) => v.legacy ? (
+              <TableRow key={v.id}>
+                <TableCell className="tnum">{formatDayYearHm(v.checkIn)}</TableCell>
+                <TableCell className="text-muted-foreground">—</TableCell><TableCell>—</TableCell><TableCell className="text-muted-foreground">—</TableCell>
+                <TableCell className="text-right">—</TableCell><TableCell className="text-right">—</TableCell>
+                <TableCell><span className="text-sm text-muted-foreground">Frequência (sistema antigo)</span></TableCell>
+              </TableRow>
+            ) : (
               <TableRow key={v.id}>
                 <TableCell className="tnum">{formatDayHm(v.checkIn)}</TableCell>
                 <TableCell className="tnum text-muted-foreground">{formatDayHm(v.checkOut)}</TableCell>

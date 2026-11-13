@@ -246,3 +246,40 @@ describe('managing codenames (manager and reception)', () => {
     await expect(deleteCodename(c.id)).rejects.toThrow(/forbidden/i)
   })
 })
+
+describe('old-system visits (legacy frequency)', () => {
+  const at = (iso: string) => new Date(iso)
+  async function legacyVisits(customerId: bigint, isos: string[]) {
+    await db.legacyVisit.createMany({ data: isos.map((iso) => ({ customerId, visitedAt: at(iso) })) })
+  }
+
+  it('count as paid visits alongside stays and earn the benefit', async () => {
+    const c = await client('Dudu 1822')
+    await legacyVisits(c.id, Array.from({ length: 7 }, (_, i) => `2026-0${i + 1}-10T23:00:00Z`))
+    await closedVisits(c.id, 3)
+    expect(await loyaltyStatus(c.id)).toMatchObject({ paidVisits: 10, available: 1 })
+    expect((await searchCodenames('dudu'))[0]).toMatchObject({ available: 1 })
+  })
+  it('show in the list (total, last visit) and in the detail, newest first', async () => {
+    const c = await client('Lodo')
+    await legacyVisits(c.id, ['2023-07-14T17:55:00Z', '2026-11-07T03:38:28Z'])
+    await closedVisits(c.id, 1, at('2026-09-01T12:00:00Z'))
+    const row = (await listLoyaltyCustomers()).rows.find((r) => r.codename === 'Lodo')!
+    expect(row).toMatchObject({ totalVisits: 3, paidVisits: 3 })
+    expect(row.lastVisit).toEqual(at('2026-11-07T03:38:28Z'))
+    const d = (await loyaltyCustomerDetail(String(c.id)))!
+    expect(d.visits.map((v) => [v.legacy, v.checkIn.toISOString()])).toEqual([
+      [true, '2026-11-07T03:38:28.000Z'], [false, '2026-09-01T12:00:00.000Z'], [true, '2023-07-14T17:55:00.000Z'],
+    ])
+  })
+  it('move with a merge (the same instant in both counts once) and block a delete', async () => {
+    const dup = await client('Jade 2')
+    const main = await client('Jade')
+    await legacyVisits(dup.id, ['2026-10-22T06:55:58Z', '2026-10-25T04:06:54Z'])
+    await legacyVisits(main.id, ['2026-10-25T04:06:54Z', '2026-11-10T09:17:37Z'])
+    await expect(deleteCodename(dup.id)).rejects.toThrow(/has visits/)
+    await mergeCodenames(dup.id, 'jade')
+    expect(await db.legacyVisit.count({ where: { customerId: main.id } })).toBe(3)
+    expect((await loyaltyStatus(main.id)).paidVisits).toBe(3)
+  })
+})
