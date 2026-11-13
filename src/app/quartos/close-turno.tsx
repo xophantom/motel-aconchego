@@ -4,14 +4,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { closeShiftAction, type ActionState } from '@/app/caixa/actions'
+import { closeShiftAction, type CloseShiftState } from '@/app/caixa/actions'
 
 const money = (n: number) => `R$ ${n.toFixed(2)}`
 
 export function CloseTurnoButton({ shiftId, saldo, retiradoDinheiro, retiradoCartao }: { shiftId: string; saldo: number; retiradoDinheiro: number; retiradoCartao: number }) {
   const action = closeShiftAction.bind(null, shiftId)
-  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
-  useEffect(() => { if (state.ok) window.location.href = `/caixa/turno/${shiftId}?auto=1&logout=1` }, [state.ok, shiftId])
+  const [state, formAction] = useActionState<CloseShiftState, FormData>(action, { ok: false })
+  // by the id the action closed, not the prop: by now it already points to the next shift
+  useEffect(() => { if (state.closedShiftId) window.location.href = `/caixa/turno/${state.closedShiftId}?auto=1&logout=1` }, [state.closedShiftId])
   return (
     <Dialog>
       <DialogTrigger asChild><Button variant="outline">Fechar turno</Button></DialogTrigger>

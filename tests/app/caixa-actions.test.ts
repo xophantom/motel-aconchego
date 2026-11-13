@@ -22,7 +22,8 @@ describe('caixa actions', () => {
   it('closes with final withdrawals and the operator password', async () => {
     const out = await closeShiftAction('7', { ok: false }, fd({ finalWithdrawCash: '50', finalWithdrawCard: '0', password: 'senha1' }))
     expect(closeShift).toHaveBeenCalledWith(7n, { finalWithdrawCash: 50, finalWithdrawCard: 0, password: 'senha1' })
-    expect(out).toEqual({ ok: true })
+    // the form prints this id: the page re-render after close already swapped its prop to the next shift
+    expect(out).toEqual({ ok: true, closedShiftId: '7' })
   })
   it('refuses to close without a password', async () => {
     const out = await closeShiftAction('7', { ok: false }, fd({ finalWithdrawCash: '50', finalWithdrawCard: '0' }))

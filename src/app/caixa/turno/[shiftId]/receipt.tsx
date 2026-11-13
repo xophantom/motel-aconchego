@@ -35,7 +35,9 @@ export function ShiftReceipt({ data }: { data: ShiftReport }) {
       <div className="t-sep" />
       <div className="t-row t-bold t-total"><span>Saldo atual</span><span className="tnum">R$ {brl(m.saldo)}</span></div>
       <div className="t-sep" />
-      <div className="t-row"><span>Fechado por</span><span>{data.closedByName ?? '—'}{data.shift.closedAt ? ` · ${hm(data.shift.closedAt)}` : ''}</span></div>
+      {data.shift.closedAt
+        ? <div className="t-row"><span>Fechado por</span><span>{data.closedByName ?? '—'} · {hm(data.shift.closedAt)}</span></div>
+        : <div className="t-center t-bold">Turno em aberto · parcial</div>}
     </div>
   )
 }
