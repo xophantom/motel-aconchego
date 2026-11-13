@@ -9,10 +9,11 @@ import { listCategoriesForBoard, getTariffPolicy, listRegionalHolidays } from '@
 import { resolveDay, civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { getLoyaltyPolicy, loyaltyStatus } from '@/server/data/loyalty'
 import { getCurrentUser } from '@/server/session'
+import { can } from '@/lib/rbac'
 import { currentShiftSummary } from '@/server/data/shifts'
 import { RoomGrid } from './room-grid'
 
-async function Board() {
+export async function Board() {
   await connection()
   let rooms, cats
   try {
@@ -20,6 +21,9 @@ async function Board() {
   } catch { redirect('/login') }
   const me = await getCurrentUser()
   const canCash = me?.role === 'manager' || me?.role === 'reception'
+  // Housekeepers see the board too, but room consumption is stay data
+  // (stay:manage): asking for it as housekeeper threw and broke the whole page.
+  const canOps = !!me && can(me.role, 'stay:manage')
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
   // Independent reads: fetch them together instead of one round-trip after another.
   const [products, canCancel, sum, policy, regional, allCons, loyaltyPolicy] = await Promise.all([
@@ -28,7 +32,7 @@ async function Board() {
     canCash ? currentShiftSummary().catch(() => null) : null,
     getTariffPolicy(),
     listRegionalHolidays(),
-    listConsumptionForStays(openStayIds),
+    canOps ? listConsumptionForStays(openStayIds) : [],
     getLoyaltyPolicy(),
   ])
   let currentShiftId: string | null = null
