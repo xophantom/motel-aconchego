@@ -5,19 +5,18 @@ import { listProducts } from '@/server/data/products'
 import { listStockMovements } from '@/server/data/stock'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/page-header'
-import { ProductForm } from './product-form'
+import { NewProductDialog, EditProductDialog } from './product-form'
 import { StockForm } from './stock-form'
-import { reasonLabel } from '@/lib/stock-labels'
+import { reasonLabel, categoryLabel } from '@/lib/stock-labels'
 import { MOTEL_TZ } from '@/lib/time'
 
-const CAT_LABEL: Record<string, string> = { minibar: 'Frigobar', erotic: 'Erótico', kitchen: 'Cozinha', other: 'Outro' }
 const dtm = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: MOTEL_TZ })
 
 export async function ProductsBody({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
@@ -27,41 +26,16 @@ export async function ProductsBody({ searchParams }: { searchParams: Promise<{ p
   const isManager = can(me.role, 'product:manage')
   const sp = await searchParams
   const [products, movements] = await Promise.all([listProducts(), listStockMovements({ productCode: sp.product || undefined })])
-  const productOptions = products.map((p) => ({ code: p.code, description: p.description }))
+  const productOptions = products.map((p) => ({ code: p.code, description: p.description, stockQty: p.stockQty, minStock: p.minStock, trackStock: p.trackStock }))
+  // Restock comes first: it's the everyday task, and the product register below
+  // it used to be mistaken for it (a "new product" typed as a restock).
   return (
     <div className="grid gap-6">
-      {isManager && (
-        <>
-          <Card><CardHeader><CardTitle>Novo / editar produto</CardTitle></CardHeader><CardContent><ProductForm /></CardContent></Card>
-          <Card>
-            <CardHeader><CardTitle>Produtos</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Descrição</TableHead><TableHead>Categoria</TableHead><TableHead>Preço</TableHead><TableHead>Estoque</TableHead><TableHead>Mín</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {products.map((p) => {
-                    const low = p.trackStock && p.stockQty <= p.minStock
-                    return (
-                      <TableRow key={p.code} className={low ? 'bg-destructive/10' : undefined}>
-                        <TableCell className="tnum font-medium">{p.code}</TableCell><TableCell>{p.description}</TableCell>
-                        <TableCell><Badge variant="secondary" className="font-normal">{CAT_LABEL[p.category] ?? p.category}</Badge></TableCell>
-                        <TableCell className="tnum">R$ {Number(p.price).toFixed(2)}</TableCell>
-                        <TableCell className="tnum">{p.trackStock ? p.stockQty : '—'}{low && <Badge variant="destructive" className="ml-2">baixo</Badge>}</TableCell>
-                        <TableCell className="tnum text-muted-foreground">{p.minStock}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardHeader>
           <CardTitle>Reposição / ajuste de estoque</CardTitle>
-          <Button asChild variant="outline" size="sm"><a href="/produtos/baixo?auto=1" target="_blank" rel="noopener">Imprimir baixos (80mm)</a></Button>
+          <CardDescription>Entrada ou baixa no estoque de um produto que já existe.</CardDescription>
+          <CardAction><Button asChild variant="outline" size="sm"><a href="/produtos/baixo?auto=1" target="_blank" rel="noopener">Imprimir baixos (80mm)</a></Button></CardAction>
         </CardHeader>
         <CardContent className="grid gap-4">
           <StockForm products={productOptions} />
@@ -93,6 +67,38 @@ export async function ProductsBody({ searchParams }: { searchParams: Promise<{ p
           </Table>
         </CardContent>
       </Card>
+
+      {isManager && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Produtos</CardTitle>
+            <CardDescription>Cadastro: descrição, preço, categoria e estoque mínimo.</CardDescription>
+            <CardAction><NewProductDialog /></CardAction>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Descrição</TableHead><TableHead>Categoria</TableHead><TableHead>Preço</TableHead><TableHead>Estoque</TableHead><TableHead>Mín</TableHead><TableHead /></TableRow></TableHeader>
+              <TableBody>
+                {products.map((p) => {
+                  const low = p.trackStock && p.stockQty <= p.minStock
+                  return (
+                    <TableRow key={p.code} className={low ? 'bg-destructive/10' : undefined}>
+                      <TableCell className="tnum font-medium">{p.code}</TableCell><TableCell>{p.description}</TableCell>
+                      <TableCell><Badge variant="secondary" className="font-normal">{categoryLabel(p.category)}</Badge></TableCell>
+                      <TableCell className="tnum">R$ {Number(p.price).toFixed(2)}</TableCell>
+                      <TableCell className="tnum">{p.trackStock ? p.stockQty : '—'}{low && <Badge variant="destructive" className="ml-2">baixo</Badge>}</TableCell>
+                      <TableCell className="tnum text-muted-foreground">{p.minStock}</TableCell>
+                      <TableCell className="text-right">
+                        <EditProductDialog product={{ code: p.code, description: p.description, category: p.category, price: Number(p.price), cost: Number(p.cost), minStock: p.minStock, trackStock: p.trackStock }} />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

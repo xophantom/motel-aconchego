@@ -34,6 +34,16 @@ describe('addStockMovement', () => {
     expect(p.stockQty).toBe(3)
   })
 
+  it('the audit shows the reason, the quantity and the stock before → after', async () => {
+    await addStockMovement({ productCode: 'CLA', qty: 12, reason: 'restock' })
+    await addStockMovement({ productCode: 'CLA', qty: -2, reason: 'loss', note: 'quebra' })
+    const ev = await db.eventLog.findMany({ orderBy: { id: 'asc' }, select: { type: true, description: true } })
+    expect(ev).toEqual([
+      { type: 'stock.entry', description: 'Reposição +12 · Cerveja (CLA) · estoque 5 → 17' },
+      { type: 'stock.adjust', description: 'Perda -2 · Cerveja (CLA) · estoque 17 → 15 · quebra' },
+    ])
+  })
+
   it('rejects an adjustment that would go below zero', async () => {
     await expect(addStockMovement({ productCode: 'CLA', qty: -10, reason: 'inventory' })).rejects.toThrow(/insufficient stock/i)
     expect((await db.product.findUniqueOrThrow({ where: { code: 'CLA' } })).stockQty).toBe(5) // unchanged

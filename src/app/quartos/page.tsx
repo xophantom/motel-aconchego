@@ -8,7 +8,6 @@ import { listConsumptionForStays } from '@/server/data/consumption'
 import { listCategoriesForBoard, getTariffPolicy, listRegionalHolidays } from '@/server/data/tariff'
 import { resolveDay, civilDateInSaoPaulo } from '@/lib/tariff-day'
 import { getLoyaltyPolicy, loyaltyStatus } from '@/server/data/loyalty'
-import { normalizePlate } from '@/lib/plate'
 import { getCurrentUser } from '@/server/session'
 import { currentShiftSummary } from '@/server/data/shifts'
 import { RoomGrid } from './room-grid'
@@ -67,16 +66,16 @@ async function Board() {
       if (cat && rate) pricing = { billing: cat.billing, minPeriodMin: cat.minPeriodMin, maxPeriodMin: cat.maxPeriodMin, includedGuests: cat.includedGuests, ...rate }
     }
     let loyalty = null
-    if (s?.customerId && s.customer?.plate) {
+    if (s?.customerId && s.customer?.codename) {
       const st = await loyaltyStatus(s.customerId, { excludeStayId: s.id, policy: loyaltyPolicy })
-      loyalty = { plate: normalizePlate(s.customer.plate), paidVisits: st.paidVisits, available: st.available, everyVisits: st.everyVisits, rewardPercent: st.discountPercent, nextIn: st.nextIn, appliedDiscount: s.discountPercent }
+      loyalty = { codename: s.customer.codename, paidVisits: st.paidVisits, available: st.available, everyVisits: st.everyVisits, rewardPercent: st.discountPercent, nextIn: st.nextIn, appliedDiscount: s.discountPercent }
     }
     return {
       number: r.number,
       status: r.status,
       maintenanceReason: r.maintenanceReason,
       category: r.category ? { code: r.category.code, description: r.category.description } : null,
-      currentStay: s ? { id: String(s.id), checkIn: s.checkIn.toISOString(), guests: s.guests, day: s.day, chargeMode: s.chargeMode, prepaid: Number(s.prepaidAmount), consumptionAmount: Number(s.consumptionAmount), discountPercent: s.discountPercent } : null,
+      currentStay: s ? { id: String(s.id), checkIn: s.checkIn.toISOString(), guests: s.guests, day: s.day, chargeMode: s.chargeMode, prepaid: Number(s.prepaidAmount), consumptionAmount: Number(s.consumptionAmount), discountPercent: s.discountPercent, plate: s.plate } : null,
       pricing,
       tariff: tariffOf(r.category?.code),
       consumption: s ? (byStay.get(String(s.id)) ?? []) : [],

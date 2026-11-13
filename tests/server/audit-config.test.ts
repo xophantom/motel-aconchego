@@ -4,7 +4,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { upsertProduct } from '@/server/data/products'
+import { createProduct, updateProduct } from '@/server/data/products'
 import { updateLoyaltyPolicy } from '@/server/data/loyalty'
 import { createEmployee } from '@/server/data/employees'
 import { updateCategory } from '@/server/data/tariff'
@@ -20,11 +20,16 @@ beforeEach(async () => {
 })
 
 describe('config audit trail', () => {
-  it('upsertProduct writes product.update', async () => {
-    await upsertProduct({ code: 'AGU', description: 'Água', category: 'minibar', price: 5, cost: 2, stockQty: 0, minStock: 0, trackStock: false })
-    const ev = await db.eventLog.findMany({ where: { type: 'product.update' } })
-    expect(ev).toHaveLength(1)
-    expect(ev[0].entityId).toBe('AGU')
+  it('creating a product writes product.create (price, initial stock); editing writes what changed', async () => {
+    await createProduct({ code: 'AGU', description: 'Água', category: 'minibar', price: 5, cost: 2, stockQty: 12, minStock: 0, trackStock: true })
+    await updateProduct('AGU', { description: 'Água Mineral', category: 'kitchen', price: 6, cost: 2, minStock: 4, trackStock: true })
+    await updateProduct('AGU', { description: 'Água Mineral', category: 'kitchen', price: 6, cost: 2, minStock: 4, trackStock: true })
+    const ev = await db.eventLog.findMany({ where: { type: { in: ['product.create', 'product.update'] } }, orderBy: { id: 'asc' }, select: { type: true, entityId: true, description: true } })
+    expect(ev).toEqual([
+      { type: 'product.create', entityId: 'AGU', description: 'Produto Água (AGU) criado · R$ 5.00 · estoque inicial 12' },
+      { type: 'product.update', entityId: 'AGU', description: 'Produto Água Mineral (AGU) salvo · descrição Água → Água Mineral · categoria Frigobar → Cozinha · preço R$ 5.00 → R$ 6.00 · mínimo 0 → 4' },
+      { type: 'product.update', entityId: 'AGU', description: 'Produto Água Mineral (AGU) salvo · sem alterações' },
+    ])
   })
 
   it('loyalty policy update writes loyalty.policy', async () => {

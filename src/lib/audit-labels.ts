@@ -16,6 +16,9 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   'consumption.walkin': 'Venda avulsa',
   'tariff.update': 'Tarifa',
   'product.update': 'Produto',
+  'product.create': 'Produto criado',
+  'stock.entry': 'Estoque (entrada)',
+  'stock.adjust': 'Estoque (baixa)',
   'user.create': 'Usuário criado',
   'user.update': 'Usuário editado',
   'user.deactivate': 'Usuário desativado',
@@ -26,6 +29,10 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   'loyalty.apply': 'Fidelidade aplicada',
   'loyalty.remove': 'Fidelidade removida',
   'stay.plate': 'Placa',
+  'stay.codename': 'Codinome',
+  'customer.rename': 'Codinome renomeado',
+  'customer.merge': 'Codinomes juntados',
+  'customer.delete': 'Codinome excluído',
 }
 
 export function eventTypeLabel(type: string | null): string {

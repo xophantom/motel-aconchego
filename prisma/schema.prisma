@@ -141,12 +141,16 @@ model Employee {
   @@map("employee")
 }
 
+// The loyalty client, identified by a codename chosen at reception. The key is
+// the codename ignoring case/accents/extra spaces, so "Pantéra" = "pantera".
 model Customer {
   id          BigInt              @id @default(autoincrement())
+  codename    String?
+  codenameKey String?             @unique @map("codename_key")
   name        String?
   document    String?
   phone       String?
-  plate       String?             @unique
+  plate       String?             @unique // legacy: identified the client before codenames; the plate now lives on the stay
   stays       Stay[]
   redemptions LoyaltyRedemption[]
 
@@ -235,6 +239,7 @@ model Stay {
   roomNumber        String?       @map("room_number")
   categoryId        Int?          @map("category_id") @db.SmallInt
   customerId        BigInt?       @map("customer_id")
+  plate             String? // canonical (normalizePlate); a record of the visit, not tied to loyalty
   checkIn           DateTime      @map("check_in") @db.Timestamptz
   checkOut          DateTime?     @map("check_out") @db.Timestamptz
   day               DayType       @default(normal)

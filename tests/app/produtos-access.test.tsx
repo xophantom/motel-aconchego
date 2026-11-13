@@ -20,17 +20,20 @@ beforeEach(async () => {
 async function render(node: Promise<React.ReactElement>) { return renderToStaticMarkup(await node) }
 
 describe('/produtos access', () => {
-  it('reception sees the stock section but not the product CRUD form', async () => {
+  it('reception sees the stock section but not the product register', async () => {
     const html = await render(ProductsBody({ searchParams: Promise.resolve({}) }))
     expect(html).toMatch(/Reposição/i)
-    expect(html).not.toMatch(/Novo \/ editar produto/i)
+    expect(html).not.toContain('Novo produto')
+    expect(html).not.toContain('>Editar<')
+    expect(html).toContain('Quantidade atual') // shown once a product is picked
   })
 
-  it('manager sees the product CRUD too', async () => {
+  it('manager sees the register too, below the restock (the everyday task)', async () => {
     session.current = { id: 1, name: 'Boss', role: 'manager' }
     const html = await render(ProductsBody({ searchParams: Promise.resolve({}) }))
-    expect(html).toMatch(/Novo \/ editar produto/i)
-    expect(html).toMatch(/Reposição/i)
+    expect(html).toContain('Novo produto')
+    expect(html).toContain('>Editar<')
+    expect(html.indexOf('Reposição')).toBeLessThan(html.indexOf('Novo produto'))
   })
 
   it('housekeeper is redirected', async () => {
