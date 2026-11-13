@@ -22,7 +22,7 @@ export async function listRoomsWithCurrentStay() {
       status: true,
       maintenanceReason: true,
       category: { select: { code: true, description: true } },
-      currentStay: { select: { id: true, checkIn: true, guests: true, day: true, chargeMode: true, categoryId: true, prepaidAmount: true, consumptionAmount: true, customerId: true, discountPercent: true, customer: { select: { plate: true } } } },
+      currentStay: { select: { id: true, checkIn: true, guests: true, day: true, chargeMode: true, categoryId: true, prepaidAmount: true, consumptionAmount: true, customerId: true, discountPercent: true, plate: true, customer: { select: { codename: true } } } },
     },
   })
   const reopenNumbers = rooms.filter((r) => r.status === 'free' || r.status === 'cleaning').map((r) => r.number)

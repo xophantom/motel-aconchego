@@ -3,11 +3,13 @@ import { db } from '@/server/db'
 import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { logEvent } from '@/server/audit'
-import { normalizePlate, plateVariants } from '@/lib/plate'
+import { cleanCodename, codenameKey } from '@/lib/codename'
 
 // Recurring loyalty: every `everyVisits` paid visits earn `discountPercent` off
 // one stay ("a cada 10 visitas, 1 grátis"). A stay that used the benefit is not
 // a paid visit. Benefits accumulate and are applied by reception on the room.
+// The client is a codename chosen at reception (the plate is just a record of
+// the stay).
 export type LoyaltyPolicy = { everyVisits: number; discountPercent: number }
 const DEFAULT_POLICY: LoyaltyPolicy = { everyVisits: 10, discountPercent: 100 }
 
@@ -26,6 +28,11 @@ async function requireLoyaltyViewer() {
 async function requireLoyaltyManager() {
   const me = await getCurrentUser()
   if (!me || !can(me.role, 'loyalty:manage')) throw new Error('Forbidden')
+  return me
+}
+async function requireCodenameManager() {
+  const me = await getCurrentUser()
+  if (!me || !can(me.role, 'codename:manage')) throw new Error('Forbidden')
   return me
 }
 async function requireOps() {
@@ -53,23 +60,14 @@ export function loyaltyProgress(paidVisits: number, used: number, policy: Loyalt
   return { ...policy, everyVisits, paidVisits, used, available: Math.max(0, earned - used), nextIn: everyVisits - (paidVisits % everyVisits) }
 }
 
-// Customer for a typed plate: reuse the one stored under it or under an older
-// spelling of the same car (hyphen, pre-Mercosul), else create it canonical.
-// A plate that is empty once normalized means no customer.
-export async function customerByPlate(plate: string) {
+// Client for a codename typed at reception: the one under the same key (case
+// and accents ignored), else a new one. An empty codename means no client.
+export async function customerByCodename(raw: string) {
   await requireOps()
-  const canon = normalizePlate(plate)
-  if (!canon) return null
-  const existing = await db.customer.findMany({ where: { plate: { in: plateVariants(canon) } }, orderBy: { id: 'asc' } })
-  return existing.find((c) => c.plate === canon) ?? existing[0] ?? db.customer.create({ data: { plate: canon } })
-}
-
-// Every customer row standing for the same car as `customerId`.
-async function sameCarIds(customerId: bigint): Promise<bigint[]> {
-  const c = await db.customer.findUnique({ where: { id: customerId }, select: { plate: true } })
-  if (!c?.plate) return [customerId]
-  const rows = await db.customer.findMany({ where: { plate: { in: plateVariants(normalizePlate(c.plate)) } }, select: { id: true } })
-  return rows.length ? rows.map((r) => r.id) : [customerId]
+  const codename = cleanCodename(raw)
+  const key = codenameKey(codename)
+  if (!key) return null
+  return db.customer.upsert({ where: { codenameKey: key }, create: { codename, codenameKey: key }, update: {} })
 }
 
 const PAID_VISIT = { type: 'room', status: 'closed', redemptions: { none: {} } } as const
@@ -77,12 +75,57 @@ const LIVE_REDEMPTION = { stay: { status: { not: 'canceled' } } } as const
 
 export async function loyaltyStatus(customerId: bigint, opts: { excludeStayId?: bigint; policy?: LoyaltyPolicy } = {}): Promise<LoyaltyStatus> {
   await requireUser()
-  const [ids, policy] = await Promise.all([sameCarIds(customerId), opts.policy ?? getLoyaltyPolicy()])
-  const [paidVisits, used] = await Promise.all([
-    db.stay.count({ where: { ...PAID_VISIT, customerId: { in: ids }, ...(opts.excludeStayId ? { id: { not: opts.excludeStayId } } : {}) } }),
-    db.loyaltyRedemption.count({ where: { ...LIVE_REDEMPTION, customerId: { in: ids } } }),
+  const [policy, paidVisits, used] = await Promise.all([
+    opts.policy ?? getLoyaltyPolicy(),
+    db.stay.count({ where: { ...PAID_VISIT, customerId, ...(opts.excludeStayId ? { id: { not: opts.excludeStayId } } : {}) } }),
+    db.loyaltyRedemption.count({ where: { ...LIVE_REDEMPTION, customerId } }),
   ])
   return loyaltyProgress(paidVisits, used, policy)
+}
+
+type VisitStats = { totalVisits: number; paidVisits: number; used: number; lastVisit: Date | null }
+
+// Visit counts of many clients in three queries (all of them, or just `ids`).
+async function visitStats(ids?: bigint[]): Promise<(id: bigint) => VisitStats> {
+  const scope = ids ? { customerId: { in: ids } } : {}
+  const closedRoom = { customerId: { not: null }, ...scope, type: 'room', status: 'closed' } as const
+  const [visits, paid, used] = await Promise.all([
+    db.stay.groupBy({ by: ['customerId'], where: closedRoom, _count: { _all: true }, _max: { checkOut: true } }),
+    db.stay.groupBy({ by: ['customerId'], where: { ...closedRoom, ...PAID_VISIT }, _count: { _all: true } }),
+    db.loyaltyRedemption.groupBy({ by: ['customerId'], where: { ...LIVE_REDEMPTION, ...scope }, _count: { _all: true } }),
+  ])
+  const key = (id: bigint | null) => String(id)
+  const visitsBy = new Map(visits.map((v) => [key(v.customerId), v]))
+  const paidBy = new Map(paid.map((v) => [key(v.customerId), v._count._all]))
+  const usedBy = new Map(used.map((v) => [key(v.customerId), v._count._all]))
+  return (id) => ({
+    totalVisits: visitsBy.get(key(id))?._count._all ?? 0,
+    paidVisits: paidBy.get(key(id)) ?? 0,
+    used: usedBy.get(key(id)) ?? 0,
+    lastVisit: visitsBy.get(key(id))?._max.checkOut ?? null,
+  })
+}
+
+export type CodenameMatch = { id: string; codename: string; available: number; done: number; everyVisits: number }
+
+// Codenames containing the typed text, those starting with it first, with
+// their progress — the picker at check-in and on the room.
+export async function searchCodenames(q: string, limit = 8): Promise<CodenameMatch[]> {
+  await requireOps()
+  const key = codenameKey(q)
+  if (!key) return []
+  const select = { id: true, codename: true } as const
+  const starts = await db.customer.findMany({ where: { codenameKey: { startsWith: key } }, select, orderBy: { codenameKey: 'asc' }, take: limit })
+  const contains = starts.length < limit
+    ? await db.customer.findMany({ where: { codenameKey: { contains: key }, id: { notIn: starts.map((c) => c.id) } }, select, orderBy: { codenameKey: 'asc' }, take: limit - starts.length })
+    : []
+  const found = [...starts, ...contains]
+  const [policy, stats] = await Promise.all([getLoyaltyPolicy(), visitStats(found.map((c) => c.id))])
+  return found.map((c) => {
+    const s = stats(c.id)
+    const p = loyaltyProgress(s.paidVisits, s.used, policy)
+    return { id: String(c.id), codename: c.codename!, available: p.available, done: p.everyVisits - p.nextIn, everyVisits: p.everyVisits }
+  })
 }
 
 async function openStayOf(roomNumber: string) {
@@ -121,82 +164,115 @@ export async function removeLoyaltyFromRoom(roomNumber: string) {
   await logEvent({ type: 'loyalty.remove', description: `Fidelidade removida do quarto ${roomNumber}`, entity: 'stay', entityId: String(stay.id), roomNumber })
 }
 
-/** Set or fix the plate of the room's open stay (empty clears it). */
-export async function setStayPlate(roomNumber: string, plate: string) {
+/** Set or change the codename of the room's open stay (empty clears it). */
+export async function setStayCodename(roomNumber: string, codename: string) {
   await requireOps()
   const stay = await openStayOf(roomNumber)
   if (await db.loyaltyRedemption.count({ where: { stayId: stay.id } })) throw new Error('benefit applied')
-  const customer = await customerByPlate(plate)
+  const customer = await customerByCodename(codename)
   await db.stay.update({ where: { id: stay.id }, data: { customerId: customer?.id ?? null } })
-  await logEvent({ type: 'stay.plate', description: `Placa quarto ${roomNumber}: ${customer?.plate ?? '—'}`, entity: 'stay', entityId: String(stay.id), roomNumber })
+  await logEvent({ type: 'stay.codename', description: `Codinome quarto ${roomNumber}: ${customer?.codename ?? '—'}`, entity: 'stay', entityId: String(stay.id), roomNumber })
   return customer
 }
 
-export type LoyaltyCustomerRow = LoyaltyStatus & { plate: string; totalVisits: number; lastVisit: Date | null }
+export type LoyaltyCustomerRow = LoyaltyStatus & { id: string; codename: string; totalVisits: number; lastVisit: Date | null }
 
-// Every plate with its loyalty progress, most recent visit first. Rows of the
-// same car (older spellings) are summed under the canonical plate.
+// Every codename with its loyalty progress, most recent visit first.
 export async function listLoyaltyCustomers(q?: string): Promise<{ policy: LoyaltyPolicy; rows: LoyaltyCustomerRow[] }> {
   await requireLoyaltyViewer()
-  const closedRoom = { customerId: { not: null }, type: 'room', status: 'closed' } as const
-  const [policy, customers, visits, paid, used] = await Promise.all([
+  const needle = q ? codenameKey(q) : ''
+  const [policy, customers, stats] = await Promise.all([
     getLoyaltyPolicy(),
-    db.customer.findMany({ where: { plate: { not: null } }, select: { id: true, plate: true } }),
-    db.stay.groupBy({ by: ['customerId'], where: closedRoom, _count: { _all: true }, _max: { checkOut: true } }),
-    db.stay.groupBy({ by: ['customerId'], where: { ...closedRoom, ...PAID_VISIT }, _count: { _all: true } }),
-    db.loyaltyRedemption.groupBy({ by: ['customerId'], where: LIVE_REDEMPTION, _count: { _all: true } }),
+    db.customer.findMany({ where: { codenameKey: needle ? { contains: needle } : { not: null } }, select: { id: true, codename: true } }),
+    visitStats(),
   ])
-  const key = (id: bigint | null) => String(id)
-  const visitsBy = new Map(visits.map((v) => [key(v.customerId), v]))
-  const paidBy = new Map(paid.map((v) => [key(v.customerId), v._count._all]))
-  const usedBy = new Map(used.map((v) => [key(v.customerId), v._count._all]))
-  const byPlate = new Map<string, { totalVisits: number; paidVisits: number; used: number; lastVisit: Date | null }>()
-  for (const c of customers) {
-    const plate = normalizePlate(c.plate!)
-    if (!plate) continue
-    const acc = byPlate.get(plate) ?? { totalVisits: 0, paidVisits: 0, used: 0, lastVisit: null }
-    const v = visitsBy.get(key(c.id))
-    acc.totalVisits += v?._count._all ?? 0
-    acc.paidVisits += paidBy.get(key(c.id)) ?? 0
-    acc.used += usedBy.get(key(c.id)) ?? 0
-    const last = v?._max.checkOut ?? null
-    if (last && (!acc.lastVisit || last > acc.lastVisit)) acc.lastVisit = last
-    byPlate.set(plate, acc)
-  }
-  const needle = q ? normalizePlate(q) : ''
-  const rows = [...byPlate.entries()]
-    .filter(([plate]) => !needle || plate.includes(needle))
-    .map(([plate, a]) => ({ plate, totalVisits: a.totalVisits, lastVisit: a.lastVisit, ...loyaltyProgress(a.paidVisits, a.used, policy) }))
-    .sort((a, b) => (b.lastVisit?.getTime() ?? 0) - (a.lastVisit?.getTime() ?? 0) || a.plate.localeCompare(b.plate))
+  const rows = customers
+    .map((c) => {
+      const s = stats(c.id)
+      return { id: String(c.id), codename: c.codename!, totalVisits: s.totalVisits, lastVisit: s.lastVisit, ...loyaltyProgress(s.paidVisits, s.used, policy) }
+    })
+    .sort((a, b) => (b.lastVisit?.getTime() ?? 0) - (a.lastVisit?.getTime() ?? 0) || a.codename.localeCompare(b.codename, 'pt-BR'))
   return { policy, rows }
 }
 
 export type LoyaltyVisit = {
-  id: string; roomNumber: string | null; checkIn: Date; checkOut: Date | null; status: 'open' | 'closed' | 'canceled'
+  id: string; roomNumber: string | null; plate: string | null; checkIn: Date; checkOut: Date | null; status: 'open' | 'closed' | 'canceled'
   stayAmount: number | null; consumptionAmount: number; benefitPercent: number | null
 }
 
-export async function loyaltyCustomerDetail(plate: string): Promise<{ plate: string; status: LoyaltyStatus; visits: LoyaltyVisit[] } | null> {
+export async function loyaltyCustomerDetail(id: string): Promise<{ id: string; codename: string; status: LoyaltyStatus; visits: LoyaltyVisit[] } | null> {
   await requireLoyaltyViewer()
-  const canon = normalizePlate(plate)
-  const customers = canon ? await db.customer.findMany({ where: { plate: { in: plateVariants(canon) } }, select: { id: true } }) : []
-  if (!customers.length) return null
+  if (!/^\d+$/.test(id)) return null
+  const customer = await db.customer.findUnique({ where: { id: BigInt(id) }, select: { id: true, codename: true } })
+  if (!customer?.codename) return null
   const [status, stays] = await Promise.all([
-    loyaltyStatus(customers[0].id),
+    loyaltyStatus(customer.id),
     db.stay.findMany({
-      where: { customerId: { in: customers.map((c) => c.id) }, type: 'room' },
+      where: { customerId: customer.id, type: 'room' },
       orderBy: { checkIn: 'desc' },
       take: 100,
-      select: { id: true, roomNumber: true, checkIn: true, checkOut: true, status: true, stayAmount: true, consumptionAmount: true, redemptions: { select: { discountPercent: true } } },
+      select: { id: true, roomNumber: true, plate: true, checkIn: true, checkOut: true, status: true, stayAmount: true, consumptionAmount: true, redemptions: { select: { discountPercent: true } } },
     }),
   ])
   return {
-    plate: canon,
+    id,
+    codename: customer.codename,
     status,
     visits: stays.map((s) => ({
-      id: String(s.id), roomNumber: s.roomNumber, checkIn: s.checkIn, checkOut: s.checkOut, status: s.status,
+      id: String(s.id), roomNumber: s.roomNumber, plate: s.plate, checkIn: s.checkIn, checkOut: s.checkOut, status: s.status,
       stayAmount: s.stayAmount != null ? Number(s.stayAmount) : null, consumptionAmount: Number(s.consumptionAmount),
       benefitPercent: s.redemptions[0]?.discountPercent ?? null,
     })),
   }
+}
+
+async function codenameOrThrow(id: bigint) {
+  const c = await db.customer.findUnique({ where: { id } })
+  if (!c?.codename) throw new Error('codename not found')
+  return c as typeof c & { codename: string }
+}
+
+export async function renameCodename(id: bigint, raw: string) {
+  await requireCodenameManager()
+  const before = await codenameOrThrow(id)
+  const codename = cleanCodename(raw)
+  const key = codenameKey(codename)
+  if (!key) throw new Error('codename required')
+  const clash = await db.customer.findUnique({ where: { codenameKey: key }, select: { id: true } })
+  if (clash && clash.id !== id) throw new Error('codename taken')
+  const updated = await db.customer.update({ where: { id }, data: { codename, codenameKey: key } })
+  await logEvent({ type: 'customer.rename', description: `Codinome ${before.codename} → ${codename}`, entity: 'customer', entityId: String(id) })
+  return updated
+}
+
+// Fold a duplicate codename into another: its visits and benefits move over and
+// the duplicate is deleted. Returns the codename that remains.
+export async function mergeCodenames(fromId: bigint, intoCodename: string) {
+  await requireCodenameManager()
+  const from = await codenameOrThrow(fromId)
+  const key = codenameKey(intoCodename)
+  const into = key ? await db.customer.findUnique({ where: { codenameKey: key } }) : null
+  if (!into?.codename) throw new Error('codename not found')
+  if (into.id === from.id) throw new Error('same codename')
+  await db.$transaction([
+    db.stay.updateMany({ where: { customerId: from.id }, data: { customerId: into.id } }),
+    db.loyaltyRedemption.updateMany({ where: { customerId: from.id }, data: { customerId: into.id } }),
+    db.customer.delete({ where: { id: from.id } }),
+  ])
+  await logEvent({ type: 'customer.merge', description: `Codinome ${from.codename} juntado em ${into.codename}`, entity: 'customer', entityId: String(into.id) })
+  return into
+}
+
+// Only a codename never used on a stay can go (a typo caught right away);
+// one with history is merged instead, so no visit is lost.
+export async function deleteCodename(id: bigint) {
+  await requireCodenameManager()
+  const c = await codenameOrThrow(id)
+  const [stays, redemptions] = await Promise.all([
+    db.stay.count({ where: { customerId: id } }),
+    db.loyaltyRedemption.count({ where: { customerId: id } }),
+  ])
+  if (stays || redemptions) throw new Error('codename has visits')
+  await db.customer.delete({ where: { id } })
+  await logEvent({ type: 'customer.delete', description: `Codinome ${c.codename} excluído`, entity: 'customer', entityId: String(id) })
 }

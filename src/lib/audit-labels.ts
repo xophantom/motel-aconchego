@@ -26,6 +26,10 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   'loyalty.apply': 'Fidelidade aplicada',
   'loyalty.remove': 'Fidelidade removida',
   'stay.plate': 'Placa',
+  'stay.codename': 'Codinome',
+  'customer.rename': 'Codinome renomeado',
+  'customer.merge': 'Codinomes juntados',
+  'customer.delete': 'Codinome excluído',
 }
 
 export function eventTypeLabel(type: string | null): string {

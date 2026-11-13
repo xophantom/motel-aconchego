@@ -5,9 +5,10 @@ import { can } from '@/lib/rbac'
 import { computeStayAmount } from '@/lib/billing'
 import type { CheckInInput } from '@/lib/validation/stay'
 import { getCurrentOpenShift, getOrOpenCurrentShift } from '@/server/data/shifts'
-import { customerByPlate } from '@/server/data/loyalty'
+import { customerByCodename } from '@/server/data/loyalty'
 import { logEvent } from '@/server/audit'
 import { formatHm, resolveEntryTime } from '@/lib/time'
+import { normalizePlate } from '@/lib/plate'
 
 async function requireOps() {
   const me = await getCurrentUser()
@@ -49,12 +50,14 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   const now = new Date()
   const checkInAt = input.checkInTime ? await resolveCheckInAt(input.roomNumber, input.checkInTime, now) : now
   const openShiftId = (await getOrOpenCurrentShift().catch(() => null))?.id ?? null
-  const customer = input.plate ? await customerByPlate(input.plate) : null
+  const customer = input.codename ? await customerByCodename(input.codename) : null
+  const plate = input.plate ? normalizePlate(input.plate) || null : null
   const stay = await db.$transaction(async (tx) => {
     const stay = await tx.stay.create({
       data: {
         type: 'room',
         roomNumber: input.roomNumber,
+        plate,
         categoryId: room.categoryId,
         checkIn: checkInAt,
         day: input.day,
@@ -76,7 +79,7 @@ export async function checkIn(input: Omit<CheckInInput, 'chargeMode'> & { charge
   })
   await logEvent({
     type: 'stay.checkin',
-    description: `Entrada quarto ${input.roomNumber}${input.plate ? ` · placa ${input.plate}` : ''}${checkInAt !== now ? ` · horário informado ${formatHm(checkInAt)}` : ''}`,
+    description: `Entrada quarto ${input.roomNumber}${plate ? ` · placa ${plate}` : ''}${customer ? ` · codinome ${customer.codename}` : ''}${checkInAt !== now ? ` · horário informado ${formatHm(checkInAt)}` : ''}`,
     entity: 'stay',
     entityId: String(stay.id),
     roomNumber: input.roomNumber,
@@ -114,6 +117,17 @@ export async function updateCheckInTime(roomNumber: string, hhmm: string) {
   const at = await resolveCheckInAt(roomNumber, hhmm, new Date(), stay.id)
   const updated = await db.stay.update({ where: { id: stay.id }, data: { checkIn: at } })
   await logEvent({ type: 'stay.edit_checkin', description: `Horário de entrada quarto ${roomNumber}: ${formatHm(stay.checkIn)} → ${formatHm(at)}`, entity: 'stay', entityId: String(stay.id), roomNumber })
+  return updated
+}
+
+// Set or fix the plate of an occupied room (empty clears it). A record of the
+// visit only: loyalty goes by codename, so a benefit applied doesn't block it.
+export async function setStayPlate(roomNumber: string, raw: string) {
+  await requireOps()
+  const stay = await requireOpenStay(roomNumber)
+  const plate = normalizePlate(raw) || null
+  const updated = await db.stay.update({ where: { id: stay.id }, data: { plate } })
+  await logEvent({ type: 'stay.plate', description: `Placa quarto ${roomNumber}: ${plate ?? '—'}`, entity: 'stay', entityId: String(stay.id), roomNumber })
   return updated
 }
 

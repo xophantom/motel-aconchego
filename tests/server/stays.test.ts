@@ -4,7 +4,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { checkIn, checkOut, addPrepaid, updateCheckInTime } from '@/server/data/stays'
+import { checkIn, checkOut, addPrepaid, updateCheckInTime, setStayPlate } from '@/server/data/stays'
 import { formatHm } from '@/lib/time'
 
 let categoryId: number
@@ -42,6 +42,18 @@ describe('check-in', () => {
   it('housekeeper cannot check in', async () => {
     session.current = { id: 1, name: 'Cam', role: 'housekeeper' }
     await expect(checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })).rejects.toThrow(/forbidden/i)
+  })
+  it('the codename is the loyalty client; the plate is kept on the stay only', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, codename: ' Pantera  Rosa ', plate: 'abc-1234' })
+    expect(stay.plate).toBe('ABC1C34')
+    const customer = await db.customer.findUniqueOrThrow({ where: { id: stay.customerId! } })
+    expect(customer).toMatchObject({ codename: 'Pantera Rosa', codenameKey: 'pantera rosa', plate: null })
+    expect((await db.eventLog.findFirstOrThrow({ where: { type: 'stay.checkin' } })).description).toMatch(/placa ABC1C34 · codinome Pantera Rosa/)
+  })
+  it('a plate without a codename does not count for loyalty', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, plate: 'ABC1D23' })
+    expect(stay).toMatchObject({ plate: 'ABC1D23', customerId: null })
+    expect(await db.customer.count()).toBe(0)
   })
 })
 
@@ -173,5 +185,25 @@ describe('edit entry time', () => {
   })
   it('rejects a room that is not occupied', async () => {
     await expect(updateCheckInTime('01', '10:00')).rejects.toThrow(/not occupied/)
+  })
+})
+
+describe('plate of an occupied room', () => {
+  it('sets, fixes (canonical) and clears it, audited', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0 })
+    await setStayPlate('01', 'xyz-0987')
+    expect((await db.stay.findUniqueOrThrow({ where: { id: stay.id } })).plate).toBe('XYZ0J87')
+    await setStayPlate('01', ' ')
+    expect((await db.stay.findUniqueOrThrow({ where: { id: stay.id } })).plate).toBeNull()
+    expect(await db.eventLog.count({ where: { type: 'stay.plate' } })).toBe(2)
+  })
+  it('is not blocked by a loyalty benefit applied (loyalty goes by codename)', async () => {
+    const stay = await checkIn({ roomNumber: '01', day: 'normal', guests: 2, prepaidAmount: 0, codename: 'Lobo' })
+    await db.loyaltyRedemption.create({ data: { customerId: stay.customerId!, stayId: stay.id, discountPercent: 100 } })
+    await setStayPlate('01', 'ABC1D23')
+    expect((await db.stay.findUniqueOrThrow({ where: { id: stay.id } })).plate).toBe('ABC1D23')
+  })
+  it('rejects a room that is not occupied', async () => {
+    await expect(setStayPlate('01', 'ABC1D23')).rejects.toThrow(/not occupied/)
   })
 })

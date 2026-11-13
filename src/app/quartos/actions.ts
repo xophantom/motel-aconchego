@@ -7,7 +7,7 @@ import { setRoomStatus } from '@/server/data/rooms'
 import type { RoomStatus } from '@/generated/prisma/client'
 import { addConsumptionSchema } from '@/lib/validation/product'
 import { addConsumption, removeConsumption, walkinSale } from '@/server/data/consumption'
-import { applyLoyaltyToRoom, removeLoyaltyFromRoom, setStayPlate } from '@/server/data/loyalty'
+import { applyLoyaltyToRoom, removeLoyaltyFromRoom, setStayCodename } from '@/server/data/loyalty'
 
 export type ActionState = { ok: boolean; error?: string }
 
@@ -21,7 +21,7 @@ function mapErr(e: unknown): string {
     if (/benefit unavailable/i.test(e.message)) return 'Benefício indisponível.'
     if (/benefit already applied/i.test(e.message)) return 'Benefício já aplicado nesta estadia.'
     if (/no benefit applied/i.test(e.message)) return 'Nenhum benefício aplicado.'
-    if (/benefit applied/i.test(e.message)) return 'Remova o benefício antes de trocar a placa.'
+    if (/benefit applied/i.test(e.message)) return 'Remova o benefício antes de trocar o codinome.'
     if (/shift closed/i.test(e.message)) return 'Caixa fechado — só o gerente cancela.'
     if (/room reoccupied/i.test(e.message)) return 'Quarto já foi reocupado.'
     if (/no closed stay/i.test(e.message)) return 'Nada a cancelar.'
@@ -36,7 +36,7 @@ function mapErr(e: unknown): string {
 export async function checkInAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const parsed = checkInSchema.safeParse({
     roomNumber: fd.get('roomNumber'), day: fd.get('day'), chargeMode: fd.get('chargeMode') ?? 'period', guests: fd.get('guests'), prepaidAmount: fd.get('prepaidAmount') ?? 0, plate: fd.get('plate') ?? undefined,
-    checkInTime: fd.get('checkInTime') || undefined,
+    codename: fd.get('codename') ?? undefined, checkInTime: fd.get('checkInTime') || undefined,
   })
   if (!parsed.success) return { ok: false, error: 'Dados inválidos.' }
   try { await stays.checkIn(parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
@@ -74,8 +74,15 @@ export async function removeLoyaltyAction(roomNumber: string): Promise<ActionSta
 
 export async function setPlateAction(roomNumber: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
   const plate = String(fd.get('plate') ?? '').trim().slice(0, 20)
-  try { await setStayPlate(roomNumber, plate) } catch (e) { return { ok: false, error: mapErr(e) } }
+  try { await stays.setStayPlate(roomNumber, plate) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/quartos')
+  return { ok: true }
+}
+
+export async function setCodenameAction(roomNumber: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+  const codename = String(fd.get('codename') ?? '')
+  try { await setStayCodename(roomNumber, codename) } catch (e) { return { ok: false, error: mapErr(e) } }
+  revalidatePath('/quartos'); revalidatePath('/fidelidade')
   return { ok: true }
 }
 

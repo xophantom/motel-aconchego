@@ -11,16 +11,17 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { computeStayAmount } from '@/lib/billing'
 import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
 import { formatHm } from '@/lib/time'
+import { CodenameInput } from '@/components/codename-input'
 import { CloseTurnoButton } from './close-turno'
-import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyLoyaltyAction, removeLoyaltyAction, setPlateAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, editCheckInAction, type ActionState } from './actions'
+import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyLoyaltyAction, removeLoyaltyAction, setPlateAction, setCodenameAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, editCheckInAction, type ActionState } from './actions'
 
 type Product = { code: string; description: string; price: number }
 type ConsItem = { id: string; description: string; qty: number; unitPrice: number }
 type Pricing = { billing: 'motel' | 'hotel'; minPeriodMin: number; maxPeriodMin: number; includedGuests: number; basePrice: number; excessPrice30m: number; overnightPrice: number; extraGuestPrice: number }
 type DayTariff = { base: number; overnight: number }
 type Tariff = { normal: DayTariff; special: DayTariff }
-type Stay = { id: string; checkIn: string; guests: number; day: 'normal' | 'special'; chargeMode: 'period' | 'overnight'; prepaid: number; consumptionAmount: number; discountPercent: number }
-type Loyalty = { plate: string; paidVisits: number; available: number; everyVisits: number; rewardPercent: number; nextIn: number; appliedDiscount: number }
+type Stay = { id: string; checkIn: string; guests: number; day: 'normal' | 'special'; chargeMode: 'period' | 'overnight'; prepaid: number; consumptionAmount: number; discountPercent: number; plate: string | null }
+type Loyalty = { codename: string; paidVisits: number; available: number; everyVisits: number; rewardPercent: number; nextIn: number; appliedDiscount: number }
 type Room = {
   number: string
   status: 'free' | 'occupied' | 'cleaning' | 'maintenance'
@@ -217,6 +218,10 @@ export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { r
             <span className="tnum font-medium">Período {money(t.base)} · Pernoite {money(t.overnight)}</span>
           </div>
         )}
+        <div className="grid gap-1">
+          <Label htmlFor="codename">Codinome (fidelidade)</Label>
+          <CodenameInput id="codename" />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
           <div className="grid gap-1">
@@ -283,6 +288,7 @@ function OccupiedPanel({ room, products, canCancel, onDone }: { room: Room; prod
       </div>
       <CheckOut roomNumber={room.number} stayId={stay.id} onDone={onDone} />
       <EditEntryTime roomNumber={room.number} checkIn={stay.checkIn} />
+      <EditPlate roomNumber={room.number} plate={stay.plate} />
       {canCancel && <CancelEntry roomNumber={room.number} onDone={onDone} />}
     </div>
   )
@@ -411,19 +417,19 @@ function CheckOut({ roomNumber, stayId, onDone }: { roomNumber: string; stayId: 
 const rewardLabel = (pct: number) => (pct >= 100 ? 'estadia grátis' : `${pct}% na estadia`)
 
 // Recurring loyalty: progress toward the next benefit, apply/undo it, and the
-// plate (typed at check-in, or added/fixed here while the stay is open).
+// codename (picked at check-in, or added/changed here while the stay is open).
 function LoyaltySection({ roomNumber, loyalty: l }: { roomNumber: string; loyalty: Loyalty | null }) {
   if (!l) {
     return (
       <Section title="Fidelidade">
-        <p className="text-xs text-muted-foreground">Sem placa — informe para contar esta visita.</p>
-        <PlateForm roomNumber={roomNumber} />
+        <p className="text-xs text-muted-foreground">Sem codinome — informe para contar esta visita.</p>
+        <CodenameForm roomNumber={roomNumber} />
       </Section>
     )
   }
   const done = l.everyVisits - l.nextIn
   return (
-    <Section title={`Fidelidade · ${l.plate}`} right={<span className="tnum text-xs text-muted-foreground">{l.paidVisits} {l.paidVisits === 1 ? 'visita paga' : 'visitas pagas'}</span>}>
+    <Section title={`Fidelidade · ${l.codename}`} right={<span className="tnum text-xs text-muted-foreground">{l.paidVisits} {l.paidVisits === 1 ? 'visita paga' : 'visitas pagas'}</span>}>
       <div className="grid gap-2">
         {l.appliedDiscount > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -442,8 +448,8 @@ function LoyaltySection({ roomNumber, loyalty: l }: { roomNumber: string; loyalt
         </div>
         {l.appliedDiscount === 0 && (
           <details>
-            <summary className="cursor-pointer text-xs text-muted-foreground">Corrigir placa</summary>
-            <PlateForm roomNumber={roomNumber} defaultValue={l.plate} />
+            <summary className="cursor-pointer text-xs text-muted-foreground">Trocar codinome</summary>
+            <CodenameForm roomNumber={roomNumber} defaultValue={l.codename} />
           </details>
         )}
       </div>
@@ -461,15 +467,32 @@ function LoyaltyButton({ action, label, variant }: { action: () => Promise<Actio
   )
 }
 
-function PlateForm({ roomNumber, defaultValue }: { roomNumber: string; defaultValue?: string }) {
+function CodenameForm({ roomNumber, defaultValue }: { roomNumber: string; defaultValue?: string }) {
+  const action = setCodenameAction.bind(null, roomNumber)
+  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
+  return (
+    <form action={formAction} className="mt-2 flex items-start gap-2">
+      <div className="flex-1"><CodenameInput key={defaultValue} defaultValue={defaultValue} className="h-8" /></div>
+      <Button size="sm" variant="outline" type="submit">Salvar codinome</Button>
+      {state.error && <span className="text-destructive text-xs">{state.error}</span>}
+    </form>
+  )
+}
+
+// The plate is a record of the visit (loyalty goes by codename): typed at
+// check-in, or added/fixed here while the stay is open.
+function EditPlate({ roomNumber, plate }: { roomNumber: string; plate: string | null }) {
   const action = setPlateAction.bind(null, roomNumber)
   const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
   return (
-    <form action={formAction} className="mt-2 flex items-center gap-2">
-      <Input key={defaultValue} name="plate" placeholder="ABC1D23" defaultValue={defaultValue} className="h-8 w-32 uppercase" />
-      <Button size="sm" variant="outline" type="submit">Salvar placa</Button>
-      {state.error && <span className="text-destructive text-xs">{state.error}</span>}
-    </form>
+    <details className="rounded-xl border p-3">
+      <summary className="cursor-pointer text-sm font-medium">Placa <span className="tnum text-muted-foreground">({plate ?? 'não informada'})</span></summary>
+      <form action={formAction} className="mt-2 flex gap-2">
+        <Input key={plate} name="plate" placeholder="ABC1D23" defaultValue={plate ?? ''} className="w-32 uppercase" />
+        <Button variant="outline" type="submit">Salvar placa</Button>
+      </form>
+      {state.error && <p className="mt-1 text-destructive text-xs">{state.error}</p>}
+    </details>
   )
 }
 
