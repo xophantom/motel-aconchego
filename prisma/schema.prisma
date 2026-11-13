@@ -153,6 +153,7 @@ model Customer {
   plate       String?             @unique // legacy: identified the client before codenames; the plate now lives on the stay
   stays       Stay[]
   redemptions LoyaltyRedemption[]
+  legacyVisits LegacyVisit[]
 
   @@map("customer")
 }
@@ -376,6 +377,19 @@ model LoyaltyRedemption {
   @@unique([customerId, tierId])
   @@index([stayId])
   @@map("loyalty_redemption")
+}
+
+// A visit from the old system's frequency records, at its original date. It
+// counts as a paid visit for loyalty but is not a stay, so reports and cash
+// never see it. Unique per client and instant, so a re-import adds nothing.
+model LegacyVisit {
+  id         BigInt   @id @default(autoincrement())
+  customerId BigInt   @map("customer_id")
+  visitedAt  DateTime @map("visited_at") @db.Timestamptz
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, visitedAt])
+  @@map("legacy_visit")
 }
 
 // Recurring rule: every `everyVisits` paid visits earn `discountPercent` off one stay.

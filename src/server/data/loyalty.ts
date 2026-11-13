@@ -9,7 +9,8 @@ import { cleanCodename, codenameKey } from '@/lib/codename'
 // one stay ("a cada 10 visitas, 1 grátis"). A stay that used the benefit is not
 // a paid visit. Benefits accumulate and are applied by reception on the room.
 // The client is a codename chosen at reception (the plate is just a record of
-// the stay).
+// the stay). Visits from the old system (LegacyVisit, at their original date)
+// count as paid visits too.
 export type LoyaltyPolicy = { everyVisits: number; discountPercent: number }
 const DEFAULT_POLICY: LoyaltyPolicy = { everyVisits: 10, discountPercent: 100 }
 
@@ -75,35 +76,43 @@ const LIVE_REDEMPTION = { stay: { status: { not: 'canceled' } } } as const
 
 export async function loyaltyStatus(customerId: bigint, opts: { excludeStayId?: bigint; policy?: LoyaltyPolicy } = {}): Promise<LoyaltyStatus> {
   await requireUser()
-  const [policy, paidVisits, used] = await Promise.all([
+  const [policy, paidStays, legacy, used] = await Promise.all([
     opts.policy ?? getLoyaltyPolicy(),
     db.stay.count({ where: { ...PAID_VISIT, customerId, ...(opts.excludeStayId ? { id: { not: opts.excludeStayId } } : {}) } }),
+    db.legacyVisit.count({ where: { customerId } }),
     db.loyaltyRedemption.count({ where: { ...LIVE_REDEMPTION, customerId } }),
   ])
-  return loyaltyProgress(paidVisits, used, policy)
+  return loyaltyProgress(paidStays + legacy, used, policy)
 }
 
 type VisitStats = { totalVisits: number; paidVisits: number; used: number; lastVisit: Date | null }
 
-// Visit counts of many clients in three queries (all of them, or just `ids`).
+// Visit counts of many clients in four queries (all of them, or just `ids`).
+// Old-system visits add to both total and paid visits, and to the last visit.
 async function visitStats(ids?: bigint[]): Promise<(id: bigint) => VisitStats> {
   const scope = ids ? { customerId: { in: ids } } : {}
   const closedRoom = { customerId: { not: null }, ...scope, type: 'room', status: 'closed' } as const
-  const [visits, paid, used] = await Promise.all([
+  const [visits, paid, legacy, used] = await Promise.all([
     db.stay.groupBy({ by: ['customerId'], where: closedRoom, _count: { _all: true }, _max: { checkOut: true } }),
     db.stay.groupBy({ by: ['customerId'], where: { ...closedRoom, ...PAID_VISIT }, _count: { _all: true } }),
+    db.legacyVisit.groupBy({ by: ['customerId'], where: scope, _count: { _all: true }, _max: { visitedAt: true } }),
     db.loyaltyRedemption.groupBy({ by: ['customerId'], where: { ...LIVE_REDEMPTION, ...scope }, _count: { _all: true } }),
   ])
   const key = (id: bigint | null) => String(id)
   const visitsBy = new Map(visits.map((v) => [key(v.customerId), v]))
   const paidBy = new Map(paid.map((v) => [key(v.customerId), v._count._all]))
+  const legacyBy = new Map(legacy.map((v) => [key(v.customerId), v]))
   const usedBy = new Map(used.map((v) => [key(v.customerId), v._count._all]))
-  return (id) => ({
-    totalVisits: visitsBy.get(key(id))?._count._all ?? 0,
-    paidVisits: paidBy.get(key(id)) ?? 0,
-    used: usedBy.get(key(id)) ?? 0,
-    lastVisit: visitsBy.get(key(id))?._max.checkOut ?? null,
-  })
+  const latest = (a: Date | null | undefined, b: Date | null | undefined) => (a && b ? (a > b ? a : b) : (a ?? b ?? null))
+  return (id) => {
+    const l = legacyBy.get(key(id))
+    return {
+      totalVisits: (visitsBy.get(key(id))?._count._all ?? 0) + (l?._count._all ?? 0),
+      paidVisits: (paidBy.get(key(id)) ?? 0) + (l?._count._all ?? 0),
+      used: usedBy.get(key(id)) ?? 0,
+      lastVisit: latest(visitsBy.get(key(id))?._max.checkOut, l?._max.visitedAt),
+    }
+  }
 }
 
 export type CodenameMatch = { id: string; codename: string; available: number; done: number; everyVisits: number }
@@ -198,6 +207,7 @@ export async function listLoyaltyCustomers(q?: string): Promise<{ policy: Loyalt
 export type LoyaltyVisit = {
   id: string; roomNumber: string | null; plate: string | null; checkIn: Date; checkOut: Date | null; status: 'open' | 'closed' | 'canceled'
   stayAmount: number | null; consumptionAmount: number; benefitPercent: number | null
+  legacy: boolean // an old-system frequency record, not a stay
 }
 
 export async function loyaltyCustomerDetail(id: string): Promise<{ id: string; codename: string; status: LoyaltyStatus; visits: LoyaltyVisit[] } | null> {
@@ -205,7 +215,7 @@ export async function loyaltyCustomerDetail(id: string): Promise<{ id: string; c
   if (!/^\d+$/.test(id)) return null
   const customer = await db.customer.findUnique({ where: { id: BigInt(id) }, select: { id: true, codename: true } })
   if (!customer?.codename) return null
-  const [status, stays] = await Promise.all([
+  const [status, stays, legacy] = await Promise.all([
     loyaltyStatus(customer.id),
     db.stay.findMany({
       where: { customerId: customer.id, type: 'room' },
@@ -213,17 +223,21 @@ export async function loyaltyCustomerDetail(id: string): Promise<{ id: string; c
       take: 100,
       select: { id: true, roomNumber: true, plate: true, checkIn: true, checkOut: true, status: true, stayAmount: true, consumptionAmount: true, redemptions: { select: { discountPercent: true } } },
     }),
+    db.legacyVisit.findMany({ where: { customerId: customer.id }, orderBy: { visitedAt: 'desc' }, take: 100 }),
   ])
-  return {
-    id,
-    codename: customer.codename,
-    status,
-    visits: stays.map((s) => ({
+  const visits: LoyaltyVisit[] = [
+    ...stays.map((s) => ({
       id: String(s.id), roomNumber: s.roomNumber, plate: s.plate, checkIn: s.checkIn, checkOut: s.checkOut, status: s.status,
       stayAmount: s.stayAmount != null ? Number(s.stayAmount) : null, consumptionAmount: Number(s.consumptionAmount),
-      benefitPercent: s.redemptions[0]?.discountPercent ?? null,
+      benefitPercent: s.redemptions[0]?.discountPercent ?? null, legacy: false,
     })),
-  }
+    ...legacy.map((v) => ({
+      id: `legacy-${v.id}`, roomNumber: null, plate: null, checkIn: v.visitedAt, checkOut: null, status: 'closed' as const,
+      stayAmount: null, consumptionAmount: 0, benefitPercent: null, legacy: true,
+    })),
+  ]
+  visits.sort((a, b) => b.checkIn.getTime() - a.checkIn.getTime())
+  return { id, codename: customer.codename, status, visits: visits.slice(0, 100) }
 }
 
 async function codenameOrThrow(id: bigint) {
@@ -257,6 +271,9 @@ export async function mergeCodenames(fromId: bigint, intoCodename: string) {
   await db.$transaction([
     db.stay.updateMany({ where: { customerId: from.id }, data: { customerId: into.id } }),
     db.loyaltyRedemption.updateMany({ where: { customerId: from.id }, data: { customerId: into.id } }),
+    // an old-system visit both already have at the same instant is the same visit
+    db.$executeRaw`DELETE FROM legacy_visit f USING legacy_visit i WHERE f.customer_id = ${from.id} AND i.customer_id = ${into.id} AND f.visited_at = i.visited_at`,
+    db.legacyVisit.updateMany({ where: { customerId: from.id }, data: { customerId: into.id } }),
     db.customer.delete({ where: { id: from.id } }),
   ])
   await logEvent({ type: 'customer.merge', description: `Codinome ${from.codename} juntado em ${into.codename}`, entity: 'customer', entityId: String(into.id) })
@@ -268,11 +285,12 @@ export async function mergeCodenames(fromId: bigint, intoCodename: string) {
 export async function deleteCodename(id: bigint) {
   await requireCodenameManager()
   const c = await codenameOrThrow(id)
-  const [stays, redemptions] = await Promise.all([
+  const [stays, redemptions, legacy] = await Promise.all([
     db.stay.count({ where: { customerId: id } }),
     db.loyaltyRedemption.count({ where: { customerId: id } }),
+    db.legacyVisit.count({ where: { customerId: id } }),
   ])
-  if (stays || redemptions) throw new Error('codename has visits')
+  if (stays || redemptions || legacy) throw new Error('codename has visits')
   await db.customer.delete({ where: { id } })
   await logEvent({ type: 'customer.delete', description: `Codinome ${c.codename} excluído`, entity: 'customer', entityId: String(id) })
 }
