@@ -1,7 +1,7 @@
 'use client'
 import { useActionState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
-import { closeShiftAction, cashMovementAction, type ActionState } from './actions'
+import { closeShiftAction, cashMovementAction, type ActionState, type CloseShiftState } from './actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -38,8 +38,9 @@ export function MovementForm({ type, label, canUse }: { type: 'withdrawal' | 'su
 // Fechar turno: retirada final dinheiro/cartão + senha → fecha, imprime e desloga.
 export function CloseShiftForm({ shiftId, saldo }: { shiftId: string; saldo: number }) {
   const action = closeShiftAction.bind(null, shiftId)
-  const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
-  useEffect(() => { if (state.ok) window.location.href = `/caixa/turno/${shiftId}?auto=1&logout=1` }, [state.ok, shiftId])
+  const [state, formAction] = useActionState<CloseShiftState, FormData>(action, { ok: false })
+  // by the id the action closed, not the prop: by now it already points to the next shift
+  useEffect(() => { if (state.closedShiftId) window.location.href = `/caixa/turno/${state.closedShiftId}?auto=1&logout=1` }, [state.closedShiftId])
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       <div className="grid gap-1"><span className="text-xs uppercase tracking-wide text-muted-foreground">Saldo atual</span><span className="tnum font-display text-lg font-bold">R$ {saldo.toFixed(2)}</span></div>

@@ -5,6 +5,10 @@ import * as shifts from '@/server/data/shifts'
 import { updateCashPolicy } from '@/server/data/cash-policy'
 
 export type ActionState = { ok: boolean; error?: string }
+// Carries the id of the shift that was closed: the revalidation below re-renders
+// the page, which auto-opens the next shift and swaps the form's `shiftId` prop
+// to it, so redirecting by the prop would print the new (empty, open) shift.
+export type CloseShiftState = ActionState & { closedShiftId?: string }
 
 function mapErr(e: unknown): string {
   if (e instanceof Error) {
@@ -16,12 +20,12 @@ function mapErr(e: unknown): string {
   return 'Erro ao processar.'
 }
 
-export async function closeShiftAction(shiftId: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function closeShiftAction(shiftId: string, _prev: CloseShiftState, fd: FormData): Promise<CloseShiftState> {
   const parsed = closeShiftSchema.safeParse({ finalWithdrawCash: fd.get('finalWithdrawCash') ?? 0, finalWithdrawCard: fd.get('finalWithdrawCard') ?? 0, password: fd.get('password') ?? '' })
   if (!parsed.success) return { ok: false, error: 'Informe a senha para fechar.' }
   try { await shifts.closeShift(BigInt(shiftId), parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/caixa'); revalidatePath('/quartos')
-  return { ok: true }
+  return { ok: true, closedShiftId: shiftId }
 }
 
 export async function cashMovementAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

@@ -18,5 +18,12 @@ describe('ShiftReceipt', () => {
     expect(html).toMatch(/Retirado.*Dinheiro/s)
     expect(html).toMatch(/Retirado.*Cart/s)
     expect(html).toContain('01')
+    expect(html).not.toContain('Turno em aberto')
+  })
+  it('marks an open shift as partial instead of "Fechado por —"', () => {
+    const open = { ...data, shift: { ...data.shift, closedAt: null }, closedByName: null }
+    const html = renderToStaticMarkup(<ShiftReceipt data={open} />)
+    expect(html).toContain('Turno em aberto')
+    expect(html).not.toContain('Fechado por')
   })
 })
