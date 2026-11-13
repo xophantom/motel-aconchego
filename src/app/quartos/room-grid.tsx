@@ -183,6 +183,11 @@ function Section({ title, right, children }: { title: string; right?: React.Reac
 export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { room: Room; onDone: () => void; suggestedDay: 'normal' | 'special'; suggestedReason: DayReason }) {
   const [state, action] = useActionState<ActionState, FormData>(checkInAction, { ok: false })
   const [day, setDay] = useState<'normal' | 'special'>(suggestedDay)
+  // The entry time shows the clock and follows it until the operator types one
+  // (null = untouched). Untouched submits empty, so the server stamps the exact
+  // instant instead of a minute-truncated HH:MM.
+  const [entryTime, setEntryTime] = useState<string | null>(null)
+  const now = useNow(entryTime === null)
   useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
   const t = room.tariff?.[day]
   return (
@@ -216,8 +221,9 @@ export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { r
           <div className="grid gap-1"><Label htmlFor="plate">Placa (opcional)</Label><Input id="plate" name="plate" placeholder="ABC1D23" className="uppercase" /></div>
           <div className="grid gap-1">
             <Label htmlFor="checkInTime">Horário de entrada</Label>
-            <Input id="checkInTime" name="checkInTime" type="time" />
-            <span className="text-[11px] text-muted-foreground">vazio = agora · use se esqueceu de dar entrada</span>
+            <Input id="checkInTime" type="time" value={entryTime ?? formatHm(new Date(now))} onChange={(e) => setEntryTime(e.target.value || null)} />
+            <input type="hidden" name="checkInTime" value={entryTime ?? ''} />
+            <span className="text-[11px] text-muted-foreground">{entryTime === null ? 'agora · altere se esqueceu de dar entrada' : 'horário informado · apague para voltar a agora'}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">

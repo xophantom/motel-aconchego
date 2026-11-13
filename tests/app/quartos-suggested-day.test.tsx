@@ -41,3 +41,20 @@ describe('FreeActions suggested tariff', () => {
     expect(html).toContain('R$ 160.00')
   })
 })
+
+describe('FreeActions entry time', () => {
+  it('shows the current time but submits empty until edited (server stamps now)', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-13T17:42:30Z')) // 14:42 in Brasília
+    try {
+      const html = renderToStaticMarkup(
+        <FreeActions room={room as any} onDone={() => {}} suggestedDay="normal" suggestedReason="weekday" />,
+      )
+      expect(html).toMatch(/id="checkInTime"[^>]*value="14:42"|value="14:42"[^>]*id="checkInTime"/)
+      expect(html).toMatch(/type="hidden"[^>]*name="checkInTime"[^>]*value=""|name="checkInTime"[^>]*type="hidden"/)
+      expect(html).not.toMatch(/id="checkInTime"[^>]*name=|name="checkInTime"[^>]*id="checkInTime"/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
