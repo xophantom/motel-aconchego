@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/server/session'
 import { can } from '@/lib/rbac'
 import { logEvent } from '@/server/audit'
 import { Prisma, type StockMovementReason } from '@/generated/prisma/client'
+import { reasonLabel } from '@/lib/stock-labels'
 
 async function requireStock() {
   const me = await getCurrentUser()
@@ -28,9 +29,10 @@ export async function addStockMovement(input: StockInput) {
       data: { stockQty: { increment: input.qty }, ...(setCost ? { cost: input.unitCost as number } : {}) },
     })
   })
+  // before → after from the incremented row itself, exact even with concurrent movements
   await logEvent({
     type: input.qty > 0 ? 'stock.entry' : 'stock.adjust',
-    description: `${input.qty > 0 ? 'Entrada' : 'Ajuste'} ${input.qty > 0 ? '+' : ''}${input.qty} · ${product.description} (${input.productCode})${input.note ? ` · ${input.note}` : ''}`,
+    description: `${reasonLabel(input.reason)} ${input.qty > 0 ? '+' : ''}${input.qty} · ${product.description} (${input.productCode}) · estoque ${updated.stockQty - input.qty} → ${updated.stockQty}${input.note ? ` · ${input.note}` : ''}`,
     entity: 'product', entityId: input.productCode,
   })
   return { code: updated.code, stockQty: updated.stockQty, cost: Number(updated.cost) }
