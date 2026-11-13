@@ -14,7 +14,11 @@ describe('createEmployeeSchema', () => {
 })
 
 describe('updateEmployeeSchema', () => {
-  it('accepts role + active', () => {
-    expect(updateEmployeeSchema.safeParse({ role: 'manager', active: false }).success).toBe(true)
+  it('accepts name + role + active', () => {
+    expect(updateEmployeeSchema.safeParse({ name: 'Lúcio', role: 'manager', active: false }).success).toBe(true)
+  })
+  it('rejects a missing or blank name', () => {
+    expect(updateEmployeeSchema.safeParse({ role: 'manager', active: false }).success).toBe(false)
+    expect(updateEmployeeSchema.safeParse({ name: '  ', role: 'manager', active: false }).success).toBe(false)
   })
 })

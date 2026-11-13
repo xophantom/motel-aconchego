@@ -34,12 +34,15 @@ export async function createEmployee(input: CreateEmployeeInput) {
 export async function updateEmployee(id: number, input: UpdateEmployeeInput) {
   await requireManager()
   await assertNotLastManager(id, { nextRole: input.role, nextActive: input.active })
+  const before = await db.employee.findUnique({ where: { id }, select: { name: true } })
   const updated = await db.employee.update({
     where: { id },
-    data: { role: input.role, active: input.active },
+    data: { name: input.name, role: input.role, active: input.active },
     select: { id: true, name: true, username: true, role: true, active: true },
   })
-  await logEvent({ type: 'user.update', description: `Funcionário ${updated.name} atualizado (${updated.role}, ${updated.active ? 'ativo' : 'inativo'})`, entity: 'employee', entityId: String(id) })
+  // a rename keeps the old name in the audit trail, so older entries still make sense
+  const renamed = before && before.name !== updated.name ? `, antes ${before.name}` : ''
+  await logEvent({ type: 'user.update', description: `Funcionário ${updated.name} atualizado (${updated.role}, ${updated.active ? 'ativo' : 'inativo'}${renamed})`, entity: 'employee', entityId: String(id) })
   return updated
 }
 

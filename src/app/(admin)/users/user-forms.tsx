@@ -106,9 +106,11 @@ export function EditUserDialog({ user }: { user: EditableUser }) {
     { ok: false },
   )
 
+  // keyed on the state object, not `.ok`: a second successful save returns ok:true
+  // again, and a boolean dependency wouldn't change to close the dialog
   useEffect(() => {
     if (updateState.ok) setOpen(false)
-  }, [updateState.ok])
+  }, [updateState])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -122,6 +124,10 @@ export function EditUserDialog({ user }: { user: EditableUser }) {
           <DialogTitle>Editar {user.name}</DialogTitle>
         </DialogHeader>
         <form action={updateFormAction} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`ef-name-${user.id}`}>Nome</Label>
+            <Input id={`ef-name-${user.id}`} name="name" defaultValue={user.name} placeholder="Nome completo" required />
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`ef-role-${user.id}`}>Papel</Label>
             <NativeSelect id={`ef-role-${user.id}`} name="role" defaultValue={user.role}>

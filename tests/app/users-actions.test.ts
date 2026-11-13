@@ -5,7 +5,7 @@ const session = vi.hoisted(() => ({ current: null as null | { id: number; name: 
 vi.mock('@/server/session', () => ({ getCurrentUser: async () => session.current }))
 
 import { db } from '@/server/db'
-import { createUserAction } from '@/app/(admin)/users/actions'
+import { createUserAction, updateUserAction } from '@/app/(admin)/users/actions'
 
 beforeEach(async () => {
   await db.employee.deleteMany()
@@ -34,5 +34,21 @@ describe('createUserAction', () => {
     const res = await createUserAction({ ok: false }, form({ name: 'B', username: 'estela', role: 'reception', password: 'abcdef' }))
     expect(res.ok).toBe(false)
     expect(res.error).toMatch(/já existe|exists/i)
+  })
+})
+
+describe('updateUserAction', () => {
+  it('renames, trimming spaces', async () => {
+    const e = await db.employee.create({ data: { name: 'Administrador', username: 'admin', role: 'manager', passwordHash: 'x' } })
+    const res = await updateUserAction(e.id, { ok: false }, form({ name: '  Lúcio  ', role: 'manager', active: 'on' }))
+    expect(res.ok).toBe(true)
+    expect((await db.employee.findUniqueOrThrow({ where: { id: e.id } })).name).toBe('Lúcio')
+  })
+  it('rejects a blank name', async () => {
+    const e = await db.employee.create({ data: { name: 'Administrador', username: 'admin', role: 'manager', passwordHash: 'x' } })
+    const res = await updateUserAction(e.id, { ok: false }, form({ name: '   ', role: 'manager', active: 'on' }))
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/nome/i)
+    expect((await db.employee.findUniqueOrThrow({ where: { id: e.id } })).name).toBe('Administrador')
   })
 })

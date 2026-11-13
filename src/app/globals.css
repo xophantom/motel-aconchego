@@ -330,9 +330,12 @@
 }
 .legacy header a, .legacy header span, .legacy header button { color: #ffffff !important; }
 
-/* ---- Thermal ticket (80mm) ---- */
+/* ---- Thermal ticket (80mm) ----
+   O papel tem 80mm, mas a cabeça térmica só imprime ~72mm e o driver perde
+   uns mm na borda: o recibo ocupa 72mm com 4mm de respiro de cada lado, senão
+   o começo e o fim das linhas saem cortados. */
 .ticket-page { max-width: 80mm; margin: 0 auto; padding: 8px; }
-.ticket { width: 80mm; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; padding: 6px 8px; }
+.ticket { width: 72mm; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.35; color: #000; background: #fff; padding: 6px 4mm; }
 .ticket .t-center { text-align: center; }
 .ticket .t-bold { font-weight: 700; }
 .ticket .t-small { font-size: 10px; }
@@ -343,10 +346,11 @@
 .ticket-print-btn { border: 1px solid currentColor; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
 
 @media print {
-  @page { size: 80mm auto; margin: 0; }
+  /* Sem `size`: "80mm auto" é inválido e o Chrome ignorava; quem manda é o papel do driver. */
+  @page { margin: 0; }
   body { background: #fff; }
   body * { visibility: hidden; }
   #ticket, #ticket * { visibility: visible; }
-  #ticket { position: absolute; left: 0; top: 0; width: 80mm; }
+  #ticket { position: absolute; left: 0; top: 0; }
   .ticket-actions { display: none; }
 }

@@ -10,7 +10,7 @@ export function ShiftReceipt({ data }: { data: ShiftReport }) {
   return (
     <div id="ticket" className="ticket">
       <div className="t-center t-bold">{MOTEL_NAME}</div>
-      <div className="t-center">Relatório de turno · {periodLabel(data.shift.period)}</div>
+      <div className="t-center">Relatório de turno · <span className="whitespace-nowrap">{periodLabel(data.shift.period)}</span></div>
       <div className="t-center t-small">{data.shift.businessDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</div>
       <div className="t-sep" />
       <div className="t-row t-small t-bold"><span>Apto</span><span>Entra/Saída</span><span>Est/Cons</span></div>

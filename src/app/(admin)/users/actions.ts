@@ -25,6 +25,7 @@ export async function createUserAction(_prev: ActionState, formData: FormData): 
 
 export async function updateUserAction(id: number, _prev: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = updateEmployeeSchema.safeParse({
+    name: formData.get('name'),
     role: formData.get('role'),
     active: formData.get('active') === 'on' || formData.get('active') === 'true',
   })

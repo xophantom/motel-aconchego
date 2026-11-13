@@ -34,7 +34,17 @@ describe('employees DAL', () => {
   it('cannot demote the last active manager via role change', async () => {
     const m = await createEmployee({ name: 'Only', username: 'onlymgr', role: 'manager', password: 'abcdef' })
     await db.employee.updateMany({ where: { role: 'manager', id: { not: m.id } }, data: { active: false } })
-    await expect(updateEmployee(m.id, { role: 'reception', active: true })).rejects.toThrow(/last manager/i)
+    await expect(updateEmployee(m.id, { name: 'Only', role: 'reception', active: true })).rejects.toThrow(/last manager/i)
+  })
+
+  it('manager can rename a user; the audit keeps the old name', async () => {
+    const e = await createEmployee({ name: 'Administrador', username: 'admin2', role: 'manager', password: 'abcdef' })
+    session.current = { id: e.id, name: e.name, role: 'manager' } // a real operator, so the audit row's FK holds
+    const updated = await updateEmployee(e.id, { name: 'Lúcio', role: 'manager', active: true })
+    expect(updated.name).toBe('Lúcio')
+    expect((await db.employee.findUniqueOrThrow({ where: { id: e.id } })).name).toBe('Lúcio')
+    const log = await db.eventLog.findFirstOrThrow({ where: { type: 'user.update', entityId: String(e.id) }, orderBy: { id: 'desc' } })
+    expect(log.description).toMatch(/Lúcio.*antes Administrador/)
   })
 
   it('manager can reset a password', async () => {

@@ -10,6 +10,7 @@ export const createEmployeeSchema = z.object({
 })
 
 export const updateEmployeeSchema = z.object({
+  name: z.string().trim().min(1, 'Informe o nome.'),
   role: roleSchema,
   active: z.boolean(),
 })
