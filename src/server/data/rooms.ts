@@ -49,6 +49,9 @@ export async function setRoomStatus(number: string, status: RoomStatus, reason?:
     throw new Error('Forbidden')
   }
   if (status === 'maintenance' && !reason) throw new Error('Maintenance requires a reason')
+  // an occupied room leaves only through checkout (or a canceled entry), which close its stay
+  const current = await db.room.findUniqueOrThrow({ where: { number }, select: { status: true } })
+  if (current.status === 'occupied') throw new Error('Room is occupied')
   const room = await db.room.update({
     where: { number },
     data: { status, maintenanceReason: status === 'maintenance' ? reason : null },

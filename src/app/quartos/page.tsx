@@ -21,9 +21,11 @@ export async function Board() {
   } catch { redirect('/login') }
   const me = await getCurrentUser()
   const canCash = me?.role === 'manager' || me?.role === 'reception'
-  // Housekeepers see the board too, but room consumption is stay data
-  // (stay:manage): asking for it as housekeeper threw and broke the whole page.
+  // Housekeepers see the board and launch consumption (consumption:add), but
+  // the rest of the stay (checkout, prepaid, loyalty…) is stay:manage. Loading
+  // what a role can't read used to throw and break the whole page.
   const canOps = !!me && can(me.role, 'stay:manage')
+  const canConsume = !!me && can(me.role, 'consumption:add')
   const openStayIds = rooms.filter((r) => r.currentStay).map((r) => r.currentStay!.id)
   // Independent reads: fetch them together instead of one round-trip after another.
   const [products, canCancel, sum, policy, regional, allCons, loyaltyPolicy] = await Promise.all([
@@ -32,7 +34,7 @@ export async function Board() {
     canCash ? currentShiftSummary().catch(() => null) : null,
     getTariffPolicy(),
     listRegionalHolidays(),
-    canOps ? listConsumptionForStays(openStayIds) : [],
+    canConsume ? listConsumptionForStays(openStayIds) : [],
     getLoyaltyPolicy(),
   ])
   let currentShiftId: string | null = null
@@ -87,7 +89,7 @@ export async function Board() {
       lastClosedStayId: r.lastClosedStayId != null ? String(r.lastClosedStayId) : null,
     }
   }))
-  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canCancel={canCancel} suggestedDay={suggested.day} suggestedReason={suggested.reason} currentShiftId={currentShiftId} canCash={canCash} shiftSaldo={shiftSaldo} retiradoDinheiro={retiradoDinheiro} retiradoCartao={retiradoCartao} />
+  return <RoomGrid rooms={data} products={products.map((p) => ({ code: p.code, description: p.description, price: Number(p.price) }))} canOps={canOps} canCancel={canCancel} suggestedDay={suggested.day} suggestedReason={suggested.reason} currentShiftId={currentShiftId} canCash={canCash} shiftSaldo={shiftSaldo} retiradoDinheiro={retiradoDinheiro} retiradoCartao={retiradoCartao} />
 }
 
 export default function QuartosPage() {

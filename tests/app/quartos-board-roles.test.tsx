@@ -29,15 +29,17 @@ beforeEach(async () => {
 })
 
 describe('/quartos board by role', () => {
-  it('housekeeper sees the board with an occupied room (room consumption is not loaded for her)', async () => {
+  it('housekeeper sees the board with an occupied room, without the walk-in sale', async () => {
     session.current = { id: 2, name: 'Cami', role: 'housekeeper' }
     const html = renderToStaticMarkup(await Board())
     expect(html).toContain('01')
     expect(html).toContain('02')
+    expect(html).not.toContain('Venda avulsa')
   })
-  it('reception still gets it', async () => {
+  it('reception still gets it, with the walk-in sale', async () => {
     session.current = { id: 1, name: 'Rita', role: 'reception' }
     const html = renderToStaticMarkup(await Board())
     expect(html).toContain('01')
+    expect(html).toContain('Venda avulsa')
   })
 })

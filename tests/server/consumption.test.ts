@@ -39,9 +39,11 @@ describe('consumption', () => {
     expect(Number(stay.consumptionAmount)).toBe(0)
     expect((await db.product.findUniqueOrThrow({ where: { code: 'CLA' } })).stockQty).toBe(50)
   })
-  it('housekeeper cannot add consumption', async () => {
+  it('housekeeper adds consumption on an occupied room but cannot remove it', async () => {
     session.current = { id: 1, name: 'Cam', role: 'housekeeper' }
-    await expect(addConsumption({ stayId, productCode: 'CLA', qty: 1 })).rejects.toThrow(/forbidden/i)
+    const item = await addConsumption({ stayId, productCode: 'CLA', qty: 1 })
+    expect(Number((await db.stay.findUniqueOrThrow({ where: { id: stayId } })).consumptionAmount)).toBe(10)
+    await expect(removeConsumption(item.id)).rejects.toThrow(/forbidden/i)
   })
 })
 

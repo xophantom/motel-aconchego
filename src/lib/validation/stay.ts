@@ -19,3 +19,5 @@ export type CheckInInput = z.infer<typeof checkInSchema>
 
 export const addPrepaidSchema = z.object({ amount: z.coerce.number().positive() })
 export const editCheckInSchema = z.object({ checkInTime: entryTime })
+// "HH:MM" of the exit when the checkout is registered late; empty = now.
+export const checkOutSchema = z.object({ checkOutTime: entryTime.optional() })

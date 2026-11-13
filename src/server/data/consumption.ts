@@ -10,9 +10,15 @@ async function requireOps() {
   if (!me || !can(me.role, 'stay:manage')) throw new Error('Forbidden')
   return me
 }
+// Housekeepers launch consumption on occupied rooms too (but don't remove it).
+async function requireConsumptionAdd() {
+  const me = await getCurrentUser()
+  if (!me || !can(me.role, 'consumption:add')) throw new Error('Forbidden')
+  return me
+}
 
 export async function addConsumption(input: { stayId: bigint; productCode: string; qty: number }) {
-  await requireOps()
+  await requireConsumptionAdd()
   const stay = await db.stay.findUniqueOrThrow({ where: { id: input.stayId } })
   if (stay.status !== 'open') throw new Error('Stay is not open')
   const product = await db.product.findUniqueOrThrow({ where: { code: input.productCode } })
@@ -34,7 +40,7 @@ export async function listConsumption(stayId: bigint) {
 }
 
 export async function listConsumptionForStays(stayIds: bigint[]) {
-  await requireOps()
+  await requireConsumptionAdd()
   if (stayIds.length === 0) return []
   return db.consumption.findMany({ where: { stayId: { in: stayIds } }, orderBy: { createdAt: 'asc' }, include: { product: { select: { description: true } } } })
 }
