@@ -12,6 +12,7 @@ import { computeStayAmount } from '@/lib/billing'
 import { dayReasonLabel, type DayReason } from '@/lib/tariff-day'
 import { formatHm, resolveEntryTime } from '@/lib/time'
 import { CodenameInput } from '@/components/codename-input'
+import { MoneyInput } from '@/components/money-input'
 import { CloseTurnoButton } from './close-turno'
 import { checkInAction, checkOutAction, setRoomStatusAction, addConsumptionAction, removeConsumptionAction, walkinSaleAction, applyLoyaltyAction, removeLoyaltyAction, setPlateAction, setCodenameAction, cancelCheckInAction, cancelCheckOutAction, addPrepaidAction, type ActionState } from './actions'
 
@@ -240,7 +241,7 @@ export function FreeActions({ room, onDone, suggestedDay, suggestedReason }: { r
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1"><Label htmlFor="guests">Hóspedes</Label><Input id="guests" name="guests" type="number" min="1" defaultValue="2" /></div>
-          <div className="grid gap-1"><Label htmlFor="prepaidAmount">Antecipado (R$)</Label><Input id="prepaidAmount" name="prepaidAmount" type="number" step="0.01" defaultValue="0" /></div>
+          <div className="grid gap-1"><Label htmlFor="prepaidAmount">Antecipado</Label><MoneyInput id="prepaidAmount" name="prepaidAmount" /></div>
         </div>
         <Submit className="w-full">Fazer entrada</Submit>
         {state.error && <p className="text-destructive text-sm">{state.error}</p>}
@@ -333,7 +334,7 @@ function AddPrepaid({ roomNumber }: { roomNumber: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(action, { ok: false })
   return (
     <form action={formAction} className="flex items-end gap-2">
-      <div className="grid gap-1"><Label htmlFor="prepaidMore" className="text-xs">Valor recebido (R$)</Label><Input id="prepaidMore" name="amount" type="number" step="0.01" min="0.01" required className="h-8 w-32" /></div>
+      <div className="grid gap-1"><Label htmlFor="prepaidMore" className="text-xs">Valor recebido</Label><MoneyInput id="prepaidMore" name="amount" optional required className="h-8 w-32" /></div>
       <Button size="sm" variant="outline" type="submit">Lançar antecipado</Button>
       {state.error && <span className="text-destructive text-xs">{state.error}</span>}
     </form>

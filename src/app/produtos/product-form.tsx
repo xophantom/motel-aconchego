@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { MoneyInput } from '@/components/money-input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
 export type EditableProduct = { code: string; description: string; category: string; price: number; cost: number; minStock: number; trackStock: boolean }
@@ -85,7 +86,11 @@ export function EditProductDialog({ product }: { product: EditableProduct }) {
 function ProductFields({ product, values: v }: { product?: EditableProduct; values?: Values }) {
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(8rem,1.5fr)_1fr_1fr_1fr]">
+      {/* two columns: money values need room to show "R$ 1.234,50" whole */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* a new product starts without a price (it must be typed); an edit starts at the stored one */}
+        <MoneyField name="price" label="Preço" required defaultValue={v?.price ?? product?.price} optional={!product && !v?.price} />
+        <MoneyField name="cost" label="Custo" defaultValue={v?.cost ?? product?.cost ?? 0} />
         <div className="grid gap-1">
           <Label htmlFor="category" className="text-xs">Categoria</Label>
           <NativeSelect id="category" name="category" defaultValue={v?.category ?? product?.category ?? 'minibar'}>
@@ -95,12 +100,19 @@ function ProductFields({ product, values: v }: { product?: EditableProduct; valu
             <NativeSelectOption value="other">Outro</NativeSelectOption>
           </NativeSelect>
         </div>
-        <Field name="price" label="Preço" type="number" step="0.01" min="0" required defaultValue={v?.price ?? (product ? String(product.price) : undefined)} />
-        <Field name="cost" label="Custo" type="number" step="0.01" min="0" defaultValue={v?.cost ?? String(product?.cost ?? 0)} />
         <Field name="minStock" label="Mínimo" type="number" step="1" min="0" defaultValue={v?.minStock ?? String(product?.minStock ?? 0)} />
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="trackStock" defaultChecked={v ? v.trackStock === 'on' : (product?.trackStock ?? true)} className="size-4 accent-primary" /> Controla estoque</label>
     </>
+  )
+}
+
+function MoneyField({ name, label, ...money }: { name: string; label: string } & Omit<React.ComponentProps<typeof MoneyInput>, 'name' | 'id'>) {
+  return (
+    <div className="grid gap-1">
+      <Label htmlFor={name} className="text-xs">{label}</Label>
+      <MoneyInput id={name} name={name} {...money} />
+    </div>
   )
 }
 

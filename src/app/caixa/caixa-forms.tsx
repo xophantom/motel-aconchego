@@ -3,6 +3,7 @@ import { useActionState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 import { closeShiftAction, cashMovementAction, type ActionState, type CloseShiftState } from './actions'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/money-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -27,7 +28,7 @@ export function MovementForm({ type, label, canUse }: { type: 'withdrawal' | 'su
           </NativeSelect>
         </div>
       )}
-      <div className="grid gap-1"><Label htmlFor={`amt-${type}`}>{label} (R$)</Label><Input id={`amt-${type}`} name="amount" type="number" step="0.01" className="w-28" /></div>
+      <div className="grid gap-1"><Label htmlFor={`amt-${type}`}>{label}</Label><MoneyInput id={`amt-${type}`} name="amount" optional required allowNegative={type === 'correction'} className={type === 'correction' ? 'w-40' : 'w-32'} /></div>
       <Input name="description" placeholder="motivo" className="w-40" />
       <Submit>{label}</Submit>
       {state.error && <span className="text-destructive text-sm">{state.error}</span>}
@@ -44,8 +45,8 @@ export function CloseShiftForm({ shiftId, saldo }: { shiftId: string; saldo: num
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       <div className="grid gap-1"><span className="text-xs uppercase tracking-wide text-muted-foreground">Saldo atual</span><span className="tnum font-display text-lg font-bold">R$ {saldo.toFixed(2)}</span></div>
-      <div className="grid gap-1"><Label htmlFor="finalWithdrawCash">Retirada dinheiro</Label><Input id="finalWithdrawCash" name="finalWithdrawCash" type="number" step="0.01" defaultValue="0" className="w-28" /></div>
-      <div className="grid gap-1"><Label htmlFor="finalWithdrawCard">Retirada cartão</Label><Input id="finalWithdrawCard" name="finalWithdrawCard" type="number" step="0.01" defaultValue="0" className="w-28" /></div>
+      <div className="grid gap-1"><Label htmlFor="finalWithdrawCash">Retirada dinheiro</Label><MoneyInput id="finalWithdrawCash" name="finalWithdrawCash" className="w-32" /></div>
+      <div className="grid gap-1"><Label htmlFor="finalWithdrawCard">Retirada cartão</Label><MoneyInput id="finalWithdrawCard" name="finalWithdrawCard" className="w-32" /></div>
       <div className="grid gap-1"><Label htmlFor="closePassword">Sua senha</Label><Input id="closePassword" name="password" type="password" autoComplete="current-password" className="w-40" /></div>
       <Submit>Fechar e sair (imprime)</Submit>
       {state.error && <span className="text-destructive text-sm">{state.error}</span>}
