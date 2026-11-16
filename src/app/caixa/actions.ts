@@ -21,7 +21,7 @@ function mapErr(e: unknown): string {
 }
 
 export async function closeShiftAction(shiftId: string, _prev: CloseShiftState, fd: FormData): Promise<CloseShiftState> {
-  const parsed = closeShiftSchema.safeParse({ finalWithdrawCash: fd.get('finalWithdrawCash') ?? 0, finalWithdrawCard: fd.get('finalWithdrawCard') ?? 0, password: fd.get('password') ?? '' })
+  const parsed = closeShiftSchema.safeParse({ finalWithdrawCash: fd.get('finalWithdrawCash') ?? 0, cardSlips: fd.getAll('cardSlip'), password: fd.get('password') ?? '' })
   if (!parsed.success) return { ok: false, error: 'Informe a senha para fechar.' }
   try { await shifts.closeShift(BigInt(shiftId), parsed.data) } catch (e) { return { ok: false, error: mapErr(e) } }
   revalidatePath('/caixa'); revalidatePath('/quartos')

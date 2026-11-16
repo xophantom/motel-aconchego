@@ -66,10 +66,11 @@ export async function closeShift(shiftId: bigint, input: CloseShiftInput): Promi
   const now = new Date()
   const finals: { method: 'cash' | 'card'; amount: number }[] = []
   if (input.finalWithdrawCash > 0) finals.push({ method: 'cash', amount: input.finalWithdrawCash })
-  if (input.finalWithdrawCard > 0) finals.push({ method: 'card', amount: input.finalWithdrawCard })
-  for (const f of finals) {
-    await db.cashMovement.create({ data: { type: 'withdrawal', method: f.method, amount: -Math.abs(f.amount), employeeId: me.id, shiftId, occurredAt: now, description: 'Retirada no fechamento' } })
-  }
+  // one withdrawal per card/Pix receipt, so the shift report lists them
+  for (const amount of input.cardSlips) finals.push({ method: 'card', amount })
+  await db.cashMovement.createMany({
+    data: finals.map((f) => ({ type: 'withdrawal' as const, method: f.method, amount: -Math.abs(f.amount), employeeId: me.id, shiftId, occurredAt: now, description: 'Retirada no fechamento' })),
+  })
   const fresh = await db.shift.findUniqueOrThrow({ where: { id: shiftId } })
   const metrics = await shiftMetrics(fresh)
   await db.shift.update({ where: { id: shiftId }, data: { closedAt: now, closedById: me.id, closingBalance: metrics.saldo } })
@@ -156,6 +157,7 @@ export type ShiftReportLine = { room: string; walkin?: boolean; checkIn: Date; c
 export type ShiftReport = {
   shift: { id: string; period: string; businessDate: Date; openedAt: Date; closedAt: Date | null; openingBalance: number }
   metrics: ShiftMetrics; closedByName: string | null; lines: ShiftReportLine[]
+  cardWithdrawals: number[] // each card withdrawal (receipt), in entry order
 }
 
 // Stays (and walk-in sales) closed in the shift, in checkout order.
@@ -175,9 +177,13 @@ export async function shiftLines(shiftId: bigint): Promise<ShiftReportLine[]> {
 export async function shiftReport(shiftId: bigint): Promise<ShiftReport> {
   await requireCash()
   const shift = await db.shift.findUniqueOrThrow({ where: { id: shiftId }, include: { closedBy: true } })
-  const [lines, metrics] = await Promise.all([linesOf(shiftId), shiftMetrics(shift)])
+  const [lines, metrics, cards] = await Promise.all([
+    linesOf(shiftId), shiftMetrics(shift),
+    db.cashMovement.findMany({ where: { shiftId, type: 'withdrawal', method: 'card' }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], select: { amount: true } }),
+  ])
   return {
     shift: { id: String(shift.id), period: shift.period, businessDate: shift.businessDate, openedAt: shift.openedAt, closedAt: shift.closedAt, openingBalance: Number(shift.openingBalance) },
     metrics, closedByName: shift.closedBy?.name ?? null, lines,
+    cardWithdrawals: cards.map((c) => Math.abs(Number(c.amount))),
   }
 }

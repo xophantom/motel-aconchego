@@ -7,6 +7,7 @@ const data = {
   metrics: { nAptos: 3, totalEstadias: 765, totalConsumo: 230, totalSangrias: 0, totalSuprimentos: 0, totalCorrecoes: 0, ticketMedio: 255, saldo: 1145, retiradoDinheiro: 100, retiradoCartao: 420, total: 995, openingDifference: 0 },
   closedByName: 'Vanessa',
   lines: [{ room: '01', checkIn: new Date('2026-08-07T09:00:00'), checkOut: new Date('2026-08-07T11:00:00'), stayAmount: 75, consumptionAmount: 20 }],
+  cardWithdrawals: [420],
 } as any
 
 describe('ShiftReceipt', () => {
@@ -19,6 +20,11 @@ describe('ShiftReceipt', () => {
     expect(html).toMatch(/Retirado.*Cart/s)
     expect(html).toContain('01')
     expect(html).not.toContain('Turno em aberto')
+  })
+  it('lists the card receipts under the card total when there are several', () => {
+    expect(renderToStaticMarkup(<ShiftReceipt data={data} />)).not.toContain(' + ')
+    const html = renderToStaticMarkup(<ShiftReceipt data={{ ...data, cardWithdrawals: [87, 120, 45.5, 167.5] }} />)
+    expect(html).toContain('87,00 + 120,00 + 45,50 + 167,50')
   })
   it('marks an open shift as partial instead of "Fechado por —"', () => {
     const open = { ...data, shift: { ...data.shift, closedAt: null }, closedByName: null }

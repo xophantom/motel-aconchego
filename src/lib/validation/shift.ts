@@ -10,7 +10,8 @@ export type CashMovementInput = z.infer<typeof cashMovementSchema>
 
 export const closeShiftSchema = z.object({
   finalWithdrawCash: z.coerce.number().min(0).default(0),
-  finalWithdrawCard: z.coerce.number().min(0).default(0),
+  // card/Pix receipts, entered one by one
+  cardSlips: z.array(z.coerce.number().positive()).default([]),
   password: z.string().min(1, 'Senha obrigatória'),
 })
 export type CloseShiftInput = z.infer<typeof closeShiftSchema>

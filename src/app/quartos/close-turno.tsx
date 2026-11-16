@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/money-input'
+import { CardSlipsInput } from '@/components/card-slips-input'
 import { closeShiftAction, type CloseShiftState } from '@/app/caixa/actions'
 
 const money = (n: number) => `R$ ${n.toFixed(2)}`
@@ -28,7 +29,7 @@ export function CloseTurnoButton({ shiftId, saldo, retiradoDinheiro, retiradoCar
         </div>
         <form action={formAction} className="grid gap-3">
           <div className="grid gap-1"><Label htmlFor="fwc">Retirada em dinheiro</Label><MoneyInput id="fwc" name="finalWithdrawCash" /></div>
-          <div className="grid gap-1"><Label htmlFor="fwd">Retirada em cartão</Label><MoneyInput id="fwd" name="finalWithdrawCard" /></div>
+          <div className="grid gap-1.5"><CardSlipsInput id="fwd" name="cardSlip" label="Retirada em cartão (um comprovante por vez)" /></div>
           <div className="grid gap-1"><Label htmlFor="fwpwd">Sua senha</Label><Input id="fwpwd" name="password" type="password" autoComplete="current-password" placeholder="senha do operador" /></div>
           <Button className="w-full">Confirmar, fechar e sair</Button>
           {state.error && <p className="text-destructive text-sm">{state.error}</p>}

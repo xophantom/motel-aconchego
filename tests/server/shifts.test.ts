@@ -57,7 +57,7 @@ describe('shifts DAL', () => {
   it('closeShift closes; the next shift opens right away carrying the saldo', async () => {
     const s = await getOrOpenCurrentShift()
     await addCashMovement({ type: 'supply', amount: 50 })
-    await closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'boss123' })
+    await closeShift(s.id, { finalWithdrawCash: 0, cardSlips: [], password: 'boss123' })
     expect(await getCurrentOpenShift()).toBeNull()
     const next = await getOrOpenCurrentShift()
     expect(next.id).not.toBe(s.id)
@@ -66,7 +66,7 @@ describe('shifts DAL', () => {
 
   it('closeShift rejects a wrong operator password and leaves the shift open', async () => {
     const s = await getOrOpenCurrentShift()
-    await expect(closeShift(s.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'wrong' })).rejects.toThrow(/senha/i)
+    await expect(closeShift(s.id, { finalWithdrawCash: 0, cardSlips: [], password: 'wrong' })).rejects.toThrow(/senha/i)
     expect(await getCurrentOpenShift()).not.toBeNull()
   })
 
@@ -99,7 +99,7 @@ describe('audit trail', () => {
 
   it('closeShift writes shift.close', async () => {
     const shift = await getOrOpenCurrentShift()
-    await closeShift(shift.id, { finalWithdrawCash: 0, finalWithdrawCard: 0, password: 'boss123' })
+    await closeShift(shift.id, { finalWithdrawCash: 0, cardSlips: [], password: 'boss123' })
     const ev = await db.eventLog.findMany({ where: { type: 'shift.close' } })
     expect(ev).toHaveLength(1)
     expect(ev[0].entityId).toBe(String(shift.id))

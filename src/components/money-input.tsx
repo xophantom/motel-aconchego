@@ -4,8 +4,14 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+export const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const MAX_CENTS = 9_999_999_999 // R$ 99.999.999,99
+
+// What was typed → cents, read from the digits (1, 3, 0 → 130), capped; no digits → null
+export function typedCents(raw: string): number | null {
+  const digits = raw.replace(/\D/g, '')
+  return digits ? Math.min(Number(digits), MAX_CENTS) : null
+}
 
 // 12.5, "12.5", "12,50" → 1250 cents (sign apart); empty → null
 function toCents(v: string | number | null | undefined): number | null {
@@ -44,8 +50,7 @@ export function MoneyInput({ name, id, defaultValue, optional = false, allowNega
   const shown = signed == null ? '' : BRL.format(signed)
 
   function onChange(raw: string) {
-    const digits = raw.replace(/\D/g, '')
-    setCents(digits ? Math.min(Number(digits), MAX_CENTS) : optional ? null : 0)
+    setCents(typedCents(raw) ?? (optional ? null : 0))
     // the shown value already carries one "-" when negative: an odd count means negative
     if (allowNegative) setNegative(((raw.match(/-/g)?.length ?? 0) % 2) === 1)
   }

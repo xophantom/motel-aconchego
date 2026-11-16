@@ -4,6 +4,7 @@ import { useFormStatus } from 'react-dom'
 import { closeShiftAction, cashMovementAction, type ActionState, type CloseShiftState } from './actions'
 import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/money-input'
+import { CardSlipsInput } from '@/components/card-slips-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -36,7 +37,7 @@ export function MovementForm({ type, label, canUse }: { type: 'withdrawal' | 'su
   )
 }
 
-// Fechar turno: retirada final dinheiro/cartão + senha → fecha, imprime e desloga.
+// Fechar turno: retirada final dinheiro/cartão (por comprovante) + senha → fecha, imprime e desloga.
 export function CloseShiftForm({ shiftId, saldo }: { shiftId: string; saldo: number }) {
   const action = closeShiftAction.bind(null, shiftId)
   const [state, formAction] = useActionState<CloseShiftState, FormData>(action, { ok: false })
@@ -46,7 +47,7 @@ export function CloseShiftForm({ shiftId, saldo }: { shiftId: string; saldo: num
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       <div className="grid gap-1"><span className="text-xs uppercase tracking-wide text-muted-foreground">Saldo atual</span><span className="tnum font-display text-lg font-bold">R$ {saldo.toFixed(2)}</span></div>
       <div className="grid gap-1"><Label htmlFor="finalWithdrawCash">Retirada dinheiro</Label><MoneyInput id="finalWithdrawCash" name="finalWithdrawCash" className="w-32" /></div>
-      <div className="grid gap-1"><Label htmlFor="finalWithdrawCard">Retirada cartão</Label><MoneyInput id="finalWithdrawCard" name="finalWithdrawCard" className="w-32" /></div>
+      <CardSlipsInput id="cardSlip" name="cardSlip" label="Retirada cartão (por comprovante)" className="w-52" listClassName="order-last basis-full" />
       <div className="grid gap-1"><Label htmlFor="closePassword">Sua senha</Label><Input id="closePassword" name="password" type="password" autoComplete="current-password" className="w-40" /></div>
       <Submit>Fechar e sair (imprime)</Submit>
       {state.error && <span className="text-destructive text-sm">{state.error}</span>}

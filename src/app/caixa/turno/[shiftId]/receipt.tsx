@@ -29,6 +29,7 @@ export function ShiftReceipt({ data }: { data: ShiftReport }) {
       <div className="t-sep" />
       <div className="t-row"><span>Retirado em Dinheiro</span><span className="tnum">{brl(m.retiradoDinheiro)}</span></div>
       <div className="t-row"><span>Retirado em Cartão</span><span className="tnum">{brl(m.retiradoCartao)}</span></div>
+      {data.cardWithdrawals.length > 1 && <div className="t-small tnum">{data.cardWithdrawals.map(brl).join(' + ')}</div>}
       {m.openingDifference !== 0 && (
         <div className="t-row"><span>⚠ Diferença de abertura</span><span className="tnum">{brl(m.openingDifference)}</span></div>
       )}
